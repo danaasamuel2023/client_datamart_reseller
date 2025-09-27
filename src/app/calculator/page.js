@@ -18,7 +18,8 @@ import {
   Edit,
   X,
   Plus,
-  RefreshCw
+  RefreshCw,
+  Info
 } from 'lucide-react';
 
 export default function ExcelCalculator() {
@@ -30,6 +31,7 @@ export default function ExcelCalculator() {
   const [calculations, setCalculations] = useState([]);
   const [showPricing, setShowPricing] = useState(false);
   const [fileResults, setFileResults] = useState([]);
+  const [showInvalidOnly, setShowInvalidOnly] = useState(false);
   
   // MTN Official Pricing Structure (No Expiry)
   const defaultPrices = {
@@ -46,7 +48,7 @@ export default function ExcelCalculator() {
     '25': 95,
     '30': 115,
     '40': 152,
-    '50': 190  // Estimated based on pattern
+    '50': 190
   };
   
   // Pricing state
@@ -236,6 +238,70 @@ export default function ExcelCalculator() {
     return /^0[235][0-9]{8}$/.test(formatted);
   };
   
+  // Advanced pattern detection for phone and capacity
+  const detectPhoneNumber = (row) => {
+    // Convert all values to strings and check each one
+    const values = Object.values(row).map(v => String(v).trim());
+    
+    for (let value of values) {
+      // Remove common formatting characters
+      const cleaned = value.replace(/[\s\-\(\)\.]/g, '');
+      
+      // Check if it looks like a phone number (9-10 digits)
+      if (/^[0-9]{9,10}$/.test(cleaned)) {
+        return cleaned;
+      }
+      
+      // Check for numbers with country code
+      if (/^(233|0233|\+233)/.test(cleaned)) {
+        return cleaned;
+      }
+    }
+    
+    return null;
+  };
+  
+  const detectCapacity = (row, phoneValue) => {
+    const values = Object.entries(row);
+    
+    for (let [key, value] of values) {
+      // Skip if this is the phone number we already found
+      if (String(value).replace(/[\s\-\(\)\.]/g, '') === phoneValue) {
+        continue;
+      }
+      
+      // Convert to string and clean
+      const strValue = String(value).trim();
+      
+      // Look for patterns like "5GB", "10 GB", "15", etc.
+      const patterns = [
+        /^(\d{1,2})(?:\s*GB)?$/i,  // Matches: "5", "5GB", "5 GB"
+        /^GB\s*(\d{1,2})$/i,        // Matches: "GB 5", "GB5"
+        /^(\d{1,2})\s*gigabyte/i,   // Matches: "5 gigabyte"
+      ];
+      
+      for (let pattern of patterns) {
+        const match = strValue.match(pattern);
+        if (match) {
+          const num = parseFloat(match[1] || match[2]);
+          if (!isNaN(num) && num > 0 && num <= 100) { // Reasonable capacity range
+            return num;
+          }
+        }
+      }
+      
+      // Simple number check (1-2 digits only)
+      if (/^[0-9]{1,2}$/.test(strValue)) {
+        const num = parseFloat(strValue);
+        if (num > 0 && num <= 100) {
+          return num;
+        }
+      }
+    }
+    
+    return null;
+  };
+  
   // Download sample Excel template
   const downloadTemplate = () => {
     const sampleData = [
@@ -331,7 +397,7 @@ export default function ExcelCalculator() {
     }
   };
   
-  // Process single file
+  // Process single file with enhanced detection
   const processSingleFile = async (uploadedFile, startId) => {
     try {
       const data = await readFileAsync(uploadedFile);
@@ -351,34 +417,50 @@ export default function ExcelCalculator() {
       let validRowCount = 0;
       
       jsonData.forEach((row, index) => {
-        // More flexible column detection
-        const phoneNumber = row.Number || row.number || 
-                          row.Phone || row.phone ||
-                          row['Phone Number'] || row['phone number'] ||
-                          row.Beneficiary || row.beneficiary ||
-                          row.Mobile || row.mobile ||
-                          row.MSISDN || row.msisdn ||
-                          (Object.values(row)[0] && String(Object.values(row)[0]).match(/^[0-9]{9,10}$/) ? Object.values(row)[0] : '') ||
-                          '';
+        // Use advanced detection
+        const detectedPhone = detectPhoneNumber(row);
+        const detectedCapacity = detectCapacity(row, detectedPhone);
         
-        const capacity = row.Capacity || row.capacity || 
-                        row.GB || row.gb || 
-                        row.Data || row.data ||
-                        row.Bundle || row.bundle ||
-                        row.Size || row.size ||
-                        (Object.values(row)[1] && !isNaN(parseFloat(Object.values(row)[1])) ? Object.values(row)[1] : '') ||
-                        '';
+        // Fallback to column-based detection if pattern detection fails
+        let phoneNumber = detectedPhone;
+        let capacity = detectedCapacity;
+        
+        if (!phoneNumber) {
+          // Try common column names
+          phoneNumber = row.Number || row.number || 
+                       row.Phone || row.phone ||
+                       row['Phone Number'] || row['phone number'] ||
+                       row.Beneficiary || row.beneficiary ||
+                       row.Mobile || row.mobile ||
+                       row.MSISDN || row.msisdn || '';
+        }
+        
+        if (capacity === null) {
+          // Try common column names
+          const capacityValue = row.Capacity || row.capacity || 
+                               row.GB || row.gb || 
+                               row.Data || row.data ||
+                               row.Bundle || row.bundle ||
+                               row.Size || row.size || '';
+          
+          if (capacityValue) {
+            const cleaned = String(capacityValue).replace(/[^0-9.]/g, '');
+            const num = parseFloat(cleaned);
+            if (!isNaN(num) && num > 0) {
+              capacity = num;
+            }
+          }
+        }
         
         const formattedPhone = formatPhoneNumber(phoneNumber);
         const isValidPhone = validatePhoneNumber(formattedPhone);
-        const capacityNum = parseFloat(String(capacity).replace(/[^0-9.]/g, ''));
-        const isValidCapacity = !isNaN(capacityNum) && capacityNum > 0;
+        const isValidCapacity = capacity !== null && capacity > 0;
         
         let cost = 0;
         let matchedTier = '';
         
         if (isValidCapacity) {
-          cost = findPriceForCapacity(capacityNum, prices);
+          cost = findPriceForCapacity(capacity, prices);
           Object.keys(prices).forEach(tier => {
             if (prices[tier] === cost && !matchedTier) {
               matchedTier = tier + 'GB';
@@ -386,17 +468,35 @@ export default function ExcelCalculator() {
           });
         }
         
+        // Build detailed error messages
+        let phoneError = '';
+        let capacityError = '';
+        
+        if (!phoneNumber) {
+          phoneError = 'No phone number detected in row';
+        } else if (!isValidPhone) {
+          phoneError = `Invalid: "${phoneNumber}" - must be 10-digit Ghana number`;
+        }
+        
+        if (capacity === null) {
+          capacityError = 'No capacity value detected in row';
+        } else if (!isValidCapacity) {
+          capacityError = `Invalid capacity value`;
+        }
+        
         const rowData = {
           id: startId + index,
           fileName: uploadedFile.name,
-          originalPhone: phoneNumber,
+          rowNumber: index + 1,
+          originalPhone: phoneNumber || 'Not found',
           formattedPhone: formattedPhone,
-          capacity: isValidCapacity ? capacityNum : 0,
+          capacity: capacity || 0,
           matchedTier: matchedTier,
           cost: cost,
           isValid: isValidPhone && isValidCapacity,
-          phoneError: !isValidPhone && phoneNumber ? 'Invalid phone' : '',
-          capacityError: !isValidCapacity && capacity ? 'Invalid capacity' : ''
+          phoneError: phoneError,
+          capacityError: capacityError,
+          rawData: JSON.stringify(row) // Store raw data for debugging
         };
         
         processedRows.push(rowData);
@@ -404,7 +504,7 @@ export default function ExcelCalculator() {
         if (rowData.isValid) {
           uniqueNumbers.add(formattedPhone);
           totalValidCost += cost;
-          totalValidGB += capacityNum;
+          totalValidGB += capacity;
           validRowCount++;
         }
       });
@@ -455,6 +555,7 @@ export default function ExcelCalculator() {
     const exportData = calculations.map(row => ({
       'Row': row.id,
       'File': row.fileName || '-',
+      'File Row #': row.rowNumber,
       'Original Number': row.originalPhone,
       'Formatted Number': row.formattedPhone,
       'Capacity (GB)': row.capacity || '-',
@@ -496,6 +597,34 @@ export default function ExcelCalculator() {
     setSuccess('Results exported successfully');
   };
   
+  // Export only invalid rows
+  const exportInvalidRows = () => {
+    const invalidRows = calculations.filter(row => !row.isValid);
+    
+    if (invalidRows.length === 0) {
+      setError('No invalid rows to export');
+      return;
+    }
+    
+    const exportData = invalidRows.map(row => ({
+      'File': row.fileName || '-',
+      'Row #': row.rowNumber,
+      'Input Data': row.originalPhone,
+      'Detected Phone': row.formattedPhone || '-',
+      'Detected Capacity': row.capacity || '-',
+      'Phone Issue': row.phoneError || '-',
+      'Capacity Issue': row.capacityError || '-',
+      'Raw Row Data': row.rawData
+    }));
+    
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Invalid Rows');
+    
+    XLSX.writeFile(wb, `invalid_rows_${Date.now()}.xlsx`);
+    setSuccess('Invalid rows exported successfully');
+  };
+  
   // Clear all
   const clearAll = () => {
     setFiles([]);
@@ -511,6 +640,7 @@ export default function ExcelCalculator() {
     });
     setError('');
     setSuccess('');
+    setShowInvalidOnly(false);
     const fileInput = document.getElementById('file-upload');
     if (fileInput) fileInput.value = '';
   };
@@ -528,6 +658,11 @@ export default function ExcelCalculator() {
     }
   };
   
+  // Filter calculations based on showInvalidOnly
+  const displayedCalculations = showInvalidOnly 
+    ? calculations.filter(row => !row.isValid)
+    : calculations;
+  
   return (
     <div className="min-h-screen bg-gray-900">
       {/* Header */}
@@ -537,9 +672,9 @@ export default function ExcelCalculator() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                 <Calculator className="w-8 h-8" />
-                MTN Data Calculator
+                MTN Data Calculator - Smart Detection
               </h1>
-              <p className="text-gray-700">Excel-based bulk pricing calculator</p>
+              <p className="text-gray-700">Auto-detects phone numbers and capacity from any Excel format</p>
             </div>
             <button
               onClick={() => setShowPricing(!showPricing)}
@@ -572,6 +707,20 @@ export default function ExcelCalculator() {
             </div>
           </div>
         )}
+        
+        {/* Detection Info */}
+        <div className="mb-4 p-4 bg-blue-500 bg-opacity-10 border border-blue-500 rounded-lg">
+          <div className="flex items-start gap-2">
+            <Info className="w-5 h-5 text-blue-500 mt-1" />
+            <div className="text-blue-400 text-sm">
+              <p className="font-bold mb-1">Smart Detection Active</p>
+              <p>• Automatically detects 9-10 digit phone numbers in any column</p>
+              <p>• Identifies capacity values (1-99GB) with various formats: "5", "5GB", "GB 5"</p>
+              <p>• No specific column names required - works with any Excel format</p>
+              <p>• Shows detailed reasons for any invalid data</p>
+            </div>
+          </div>
+        </div>
         
         {/* Pricing Configuration */}
         {showPricing && (
@@ -666,7 +815,7 @@ export default function ExcelCalculator() {
                 <FileSpreadsheet className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
                 <h3 className="text-xl font-bold text-white mb-2">Upload Excel Files</h3>
                 <p className="text-gray-400 mb-6">
-                  Upload one or more Excel files with phone numbers and data capacity
+                  Upload Excel files with phone numbers and data capacity in any format
                 </p>
                 
                 <label htmlFor="file-upload" className="cursor-pointer">
@@ -734,6 +883,26 @@ export default function ExcelCalculator() {
               </div>
             </div>
             
+            {/* Invalid Rows Alert */}
+            {summary.invalidRows > 0 && (
+              <div className="mb-4 p-4 bg-orange-500 bg-opacity-10 border border-orange-500 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-orange-500" />
+                    <p className="text-orange-400">
+                      {summary.invalidRows} invalid row{summary.invalidRows > 1 ? 's' : ''} detected - see details below
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowInvalidOnly(!showInvalidOnly)}
+                    className="px-3 py-1 bg-orange-500 bg-opacity-20 text-orange-400 rounded-lg hover:bg-opacity-30 transition-colors"
+                  >
+                    {showInvalidOnly ? 'Show All' : 'Show Invalid Only'}
+                  </button>
+                </div>
+              </div>
+            )}
+            
             {/* Action Buttons */}
             <div className="flex gap-2 mb-4">
               <label htmlFor="file-upload-more" className="cursor-pointer">
@@ -757,6 +926,15 @@ export default function ExcelCalculator() {
                 <Download className="w-4 h-4" />
                 Export All Results
               </button>
+              {summary.invalidRows > 0 && (
+                <button
+                  onClick={exportInvalidRows}
+                  className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Export Invalid Rows
+                </button>
+              )}
               <button
                 onClick={clearAll}
                 className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center gap-2"
@@ -800,6 +978,7 @@ export default function ExcelCalculator() {
                     <tr className="bg-yellow-400 text-gray-900">
                       <th className="px-4 py-3 text-left font-bold">#</th>
                       <th className="px-4 py-3 text-left font-bold">File</th>
+                      <th className="px-4 py-3 text-left font-bold">Row</th>
                       <th className="px-4 py-3 text-left font-bold">Phone Number</th>
                       <th className="px-4 py-3 text-left font-bold">Capacity</th>
                       <th className="px-4 py-3 text-left font-bold">Tier</th>
@@ -808,29 +987,36 @@ export default function ExcelCalculator() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-700">
-                    {calculations.map(row => (
-                      <tr key={row.id} className={row.isValid ? 'text-white' : 'text-gray-500'}>
+                    {displayedCalculations.map(row => (
+                      <tr key={row.id} className={row.isValid ? 'text-white' : 'bg-red-900 bg-opacity-20'}>
                         <td className="px-4 py-3">{row.id}</td>
                         <td className="px-4 py-3">
                           <span className="text-xs text-gray-400">{row.fileName?.replace(/\.(xlsx|xls|csv)$/, '')}</span>
                         </td>
+                        <td className="px-4 py-3 text-gray-400">#{row.rowNumber}</td>
                         <td className="px-4 py-3">
                           <div>
-                            <p className={row.isValid ? 'text-white' : 'text-red-400'}>
-                              {row.formattedPhone || row.originalPhone || '-'}
-                            </p>
-                            {row.phoneError && (
-                              <p className="text-xs text-red-400">{row.phoneError}</p>
+                            {row.isValid ? (
+                              <p className="text-white">{row.formattedPhone}</p>
+                            ) : (
+                              <>
+                                <p className="text-red-400">{row.originalPhone}</p>
+                                <p className="text-xs text-red-300 mt-1">{row.phoneError}</p>
+                              </>
                             )}
                           </div>
                         </td>
                         <td className="px-4 py-3">
                           <div>
-                            <p className={row.isValid ? 'text-white' : 'text-red-400'}>
-                              {row.capacity ? `${row.capacity}GB` : '-'}
-                            </p>
+                            {row.capacity > 0 ? (
+                              <p className={row.isValid ? 'text-white' : 'text-red-400'}>
+                                {row.capacity}GB
+                              </p>
+                            ) : (
+                              <p className="text-red-400">-</p>
+                            )}
                             {row.capacityError && (
-                              <p className="text-xs text-red-400">{row.capacityError}</p>
+                              <p className="text-xs text-red-300 mt-1">{row.capacityError}</p>
                             )}
                           </div>
                         </td>
@@ -838,7 +1024,7 @@ export default function ExcelCalculator() {
                           {row.matchedTier || '-'}
                         </td>
                         <td className="px-4 py-3 font-bold">
-                          ₵{row.cost.toFixed(2)}
+                          {row.cost > 0 ? `₵${row.cost.toFixed(2)}` : '-'}
                         </td>
                         <td className="px-4 py-3">
                           {row.isValid ? (
@@ -862,7 +1048,7 @@ export default function ExcelCalculator() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-gray-800 rounded-lg p-6 flex items-center gap-4">
             <Loader2 className="w-8 h-8 animate-spin text-yellow-400" />
-            <p className="text-white">Processing file...</p>
+            <p className="text-white">Processing files with smart detection...</p>
           </div>
         </div>
       )}
