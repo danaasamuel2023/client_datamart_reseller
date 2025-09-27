@@ -252,23 +252,15 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-700"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-[#1f2128] text-gray-500">New to DATAMART?</span>
-            </div>
+          {/* Admin Contact Info */}
+          <div className="mt-6 p-4 bg-gray-800 bg-opacity-50 rounded-lg">
+            <p className="text-center text-gray-400 text-sm">
+              Need an account? Contact your administrator
+            </p>
+            <p className="text-center text-gray-500 text-xs mt-1">
+              admin@datamart.com
+            </p>
           </div>
-
-          {/* Register Link */}
-          <p className="text-center text-gray-400 text-sm">
-            Don't have an account?{' '}
-            <Link href="/auth/register" className="text-yellow-400 hover:text-yellow-500 font-medium">
-              Create an account
-            </Link>
-          </p>
 
           {/* Demo Account Info (Development Only) */}
           {process.env.NODE_ENV === 'development' && (

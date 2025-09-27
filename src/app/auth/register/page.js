@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -34,6 +34,11 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // Auto-redirect to login page when component mounts
+  useEffect(() => {
+    router.push('/auth/login');
+  }, [router]);
 
   const validatePhone = (phone) => {
     const phoneRegex = /^(\+233|0)[235][0-9]{8}$/;
