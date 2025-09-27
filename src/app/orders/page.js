@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { 
   History, 
   Wallet, 
@@ -20,13 +21,16 @@ import {
   CreditCard,
   ArrowUpRight,
   ArrowDownRight,
-  Search
+  Search,
+  ArrowLeft
 } from 'lucide-react';
 
 // API Base URL
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://server-datamart-reseller.onrender.com/api';
 
 export default function TransactionHistory() {
+  const router = useRouter();
+  
   // State Management
   const [activeTab, setActiveTab] = useState('orders'); // 'orders' or 'wallet'
   const [transactions, setTransactions] = useState([]);
@@ -306,12 +310,22 @@ export default function TransactionHistory() {
       <div className="bg-[#1f2128] border-b border-gray-700">
         <div className="container mx-auto px-4 py-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-2">
-                <History className="w-8 h-8 text-yellow-400" />
-                Transaction History
-              </h1>
-              <p className="text-gray-400 mt-1">View and manage your transactions</p>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => router.push('/')}
+                className="p-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center justify-center"
+                title="Go back to dashboard"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold text-white flex items-center gap-2">
+                  <History className="w-8 h-8 text-yellow-400" />
+                  Transaction History
+                </h1>
+                <p className="text-gray-400 mt-1">View and manage your transactions</p>
+              </div>
             </div>
             
             <div className="flex gap-2">

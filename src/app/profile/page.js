@@ -38,7 +38,7 @@ import {
 } from 'lucide-react';
 
 // API Base URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://server-datamart-reseller.onrender.com/api';
 
 export default function UserProfile() {
   // State Management
@@ -52,7 +52,6 @@ export default function UserProfile() {
   // Edit States
   const [editMode, setEditMode] = useState({
     personal: false,
-    address: false,
     security: false
   });
   
@@ -60,12 +59,7 @@ export default function UserProfile() {
   const [formData, setFormData] = useState({
     fullName: '',
     phone: '',
-    address: '',
-    city: '',
-    state: '',
-    postalCode: '',
-    businessName: '',
-    taxId: ''
+    email: ''
   });
   
   // Password Change
@@ -90,25 +84,18 @@ export default function UserProfile() {
     showSecret: false
   });
   
-  // Notification Preferences
-  const [notifications, setNotifications] = useState({
-    email: {
-      transactions: true,
-      security: true,
-      marketing: false,
-      updates: true
-    },
-    sms: {
-      transactions: true,
-      security: true,
-      marketing: false,
-      updates: false
-    }
+  // Statistics (will be fetched separately if needed)
+  const [stats, setStats] = useState({
+    totalTransactions: 0,
+    successfulTransactions: 0,
+    totalSpent: 0,
+    accountAge: 'N/A'
   });
   
   // Fetch profile on mount
   useEffect(() => {
     fetchProfile();
+    fetchStats();
   }, []);
   
   // Fetch user profile
@@ -123,34 +110,75 @@ export default function UserProfile() {
         return;
       }
       
-      const response = await fetch(`${API_BASE_URL}/user/profile`, {
+      const response = await fetch(`${API_BASE_URL}/auth/profile`, {
         headers: {
           'x-auth-token': token
         }
       });
       
-      if (!response.ok) throw new Error('Failed to fetch profile');
+      if (!response.ok) {
+        throw new Error('Failed to fetch profile');
+      }
       
       const data = await response.json();
+      console.log('Profile API Response:', data); // Debug log
       
       if (data.success) {
-        setProfile(data.data);
+        // Handle both nested and flat data structures
+        const userData = data.data || data.user || data;
+        setProfile(userData);
+        
+        // Update form data based on actual structure
         setFormData({
-          fullName: data.data.personalInfo.fullName || '',
-          phone: data.data.personalInfo.phone || '',
-          address: data.data.profile.address || '',
-          city: data.data.profile.city || '',
-          state: data.data.profile.state || '',
-          postalCode: data.data.profile.postalCode || '',
-          businessName: data.data.profile.businessName || '',
-          taxId: data.data.profile.taxId || ''
+          fullName: userData.fullName || '',
+          phone: userData.phone || '',
+          email: userData.email || ''
         });
+        
+        // Update API key data if available
+        if (userData.apiAccess) {
+          setApiKeyData({
+            ...apiKeyData,
+            apiKey: userData.apiAccess.apiKey || '',
+            webhookUrl: userData.apiAccess.webhookUrl || ''
+          });
+        }
+      } else {
+        setError(data.message || 'Failed to load profile');
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
       setError('Failed to load profile');
     } finally {
       setLoading(false);
+    }
+  };
+  
+  // Fetch statistics
+  const fetchStats = async () => {
+    try {
+      const token = localStorage.getItem('Token');
+      if (!token) return;
+      
+      const response = await fetch(`${API_BASE_URL}/auth/stats`, {
+        headers: {
+          'x-auth-token': token
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setStats(data.stats || {
+            totalTransactions: 0,
+            successfulTransactions: 0,
+            totalSpent: 0,
+            accountAge: 'N/A'
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching stats:', error);
     }
   };
   
@@ -162,7 +190,7 @@ export default function UserProfile() {
       
       const token = localStorage.getItem('Token');
       
-      const response = await fetch(`${API_BASE_URL}/user/profile/personal`, {
+      const response = await fetch(`${API_BASE_URL}/auth/profile/update`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -190,46 +218,6 @@ export default function UserProfile() {
     }
   };
   
-  // Update address details
-  const updateAddressDetails = async () => {
-    try {
-      setSaving(true);
-      setError('');
-      
-      const token = localStorage.getItem('Token');
-      
-      const response = await fetch(`${API_BASE_URL}/user/profile/details`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-auth-token': token
-        },
-        body: JSON.stringify({
-          address: formData.address,
-          city: formData.city,
-          state: formData.state,
-          postalCode: formData.postalCode,
-          businessName: formData.businessName,
-          taxId: formData.taxId
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        setSuccess('Address details updated successfully');
-        setEditMode({ ...editMode, address: false });
-        fetchProfile();
-      } else {
-        setError(data.message || 'Failed to update details');
-      }
-    } catch (error) {
-      setError('Failed to update details');
-    } finally {
-      setSaving(false);
-    }
-  };
-  
   // Change password
   const changePassword = async () => {
     try {
@@ -243,13 +231,16 @@ export default function UserProfile() {
       
       const token = localStorage.getItem('Token');
       
-      const response = await fetch(`${API_BASE_URL}/user/profile/change-password`, {
+      const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-auth-token': token
         },
-        body: JSON.stringify(passwordData)
+        body: JSON.stringify({
+          currentPassword: passwordData.currentPassword,
+          newPassword: passwordData.newPassword
+        })
       });
       
       const data = await response.json();
@@ -284,7 +275,7 @@ export default function UserProfile() {
       
       const token = localStorage.getItem('Token');
       
-      const response = await fetch(`${API_BASE_URL}/user/profile/pin/set`, {
+      const response = await fetch(`${API_BASE_URL}/auth/set-pin`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -327,7 +318,7 @@ export default function UserProfile() {
       
       const token = localStorage.getItem('Token');
       
-      const response = await fetch(`${API_BASE_URL}/user/api-keys/generate`, {
+      const response = await fetch(`${API_BASE_URL}/auth/generate-api-key`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -344,8 +335,8 @@ export default function UserProfile() {
       if (data.success) {
         setApiKeyData({
           ...apiKeyData,
-          apiKey: data.data.apiKey,
-          apiSecret: data.data.apiSecret,
+          apiKey: data.apiKey,
+          apiSecret: data.apiSecret,
           showSecret: true
         });
         setSuccess('API credentials generated successfully. Save your secret key securely!');
@@ -369,6 +360,7 @@ export default function UserProfile() {
   
   // Format date
   const formatDate = (date) => {
+    if (!date) return 'N/A';
     return new Date(date).toLocaleDateString('en-GB', {
       day: '2-digit',
       month: 'short',
@@ -379,6 +371,19 @@ export default function UserProfile() {
   // Format amount
   const formatAmount = (amount) => {
     return `GHS ${(amount || 0).toFixed(2)}`;
+  };
+  
+  // Calculate account age
+  const getAccountAge = (createdAt) => {
+    if (!createdAt) return 'N/A';
+    const created = new Date(createdAt);
+    const now = new Date();
+    const diffTime = Math.abs(now - created);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 30) return `${diffDays} days`;
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months`;
+    return `${Math.floor(diffDays / 365)} years`;
   };
   
   if (loading) {
@@ -425,7 +430,10 @@ export default function UserProfile() {
             
             <div className="flex gap-2">
               <button
-                onClick={fetchProfile}
+                onClick={() => {
+                  fetchProfile();
+                  fetchStats();
+                }}
                 className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center gap-2"
               >
                 <RefreshCw className="w-4 h-4" />
@@ -446,37 +454,39 @@ export default function UserProfile() {
             </div>
             
             <div className="flex-1">
-              <h2 className="text-2xl font-bold text-white">{profile.personalInfo.fullName}</h2>
+              <h2 className="text-2xl font-bold text-white">{profile.fullName || 'User'}</h2>
               <div className="flex flex-wrap gap-4 mt-2">
                 <span className="text-gray-400 flex items-center gap-1">
                   <Mail className="w-4 h-4" />
-                  {profile.personalInfo.email}
+                  {profile.email}
                 </span>
                 <span className="text-gray-400 flex items-center gap-1">
                   <Phone className="w-4 h-4" />
-                  {profile.personalInfo.phone}
+                  {profile.phone}
                 </span>
                 <span className="text-gray-400 flex items-center gap-1">
                   <Award className="w-4 h-4" />
-                  {profile.account.role}
+                  {profile.role}
                 </span>
               </div>
               <div className="flex flex-wrap gap-2 mt-3">
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  profile.account.status === 'active' ? 'bg-green-500 bg-opacity-20 text-green-400' : 'bg-gray-600 text-gray-300'
+                  profile.status === 'active' ? 'bg-green-500 bg-opacity-20 text-green-400' : 
+                  profile.status === 'pending' ? 'bg-yellow-500 bg-opacity-20 text-yellow-400' :
+                  'bg-red-500 bg-opacity-20 text-red-400'
                 }`}>
-                  {profile.account.status}
+                  {profile.status}
                 </span>
-                {profile.personalInfo.emailVerified && (
-                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-500 bg-opacity-20 text-blue-400 flex items-center gap-1">
-                    <Check className="w-3 h-3" />
-                    Email Verified
+                {profile.wallet?.locked && (
+                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-500 bg-opacity-20 text-red-400 flex items-center gap-1">
+                    <Lock className="w-3 h-3" />
+                    Wallet Locked
                   </span>
                 )}
-                {profile.account.twoFactorEnabled && (
-                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-purple-500 bg-opacity-20 text-purple-400 flex items-center gap-1">
-                    <Shield className="w-3 h-3" />
-                    2FA Enabled
+                {profile.apiAccess?.enabled && (
+                  <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-500 bg-opacity-20 text-blue-400 flex items-center gap-1">
+                    <Key className="w-3 h-3" />
+                    API Enabled
                   </span>
                 )}
               </div>
@@ -484,8 +494,10 @@ export default function UserProfile() {
             
             <div className="bg-gray-700 rounded-lg p-4">
               <p className="text-gray-400 text-sm mb-1">Wallet Balance</p>
-              <p className="text-2xl font-bold text-yellow-400">{formatAmount(profile.wallet.balance)}</p>
-              <p className="text-xs text-gray-500 mt-1">Account age: {profile.stats.accountAge}</p>
+              <p className="text-2xl font-bold text-yellow-400">{formatAmount(profile.wallet?.balance)}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Account age: {getAccountAge(profile.createdAt)}
+              </p>
             </div>
           </div>
         </div>
@@ -497,7 +509,7 @@ export default function UserProfile() {
               <Activity className="w-5 h-5 text-yellow-400" />
               <span className="text-xs text-gray-500">Total</span>
             </div>
-            <p className="text-xl font-bold text-white">{profile.stats.totalTransactions}</p>
+            <p className="text-xl font-bold text-white">{stats.totalTransactions}</p>
             <p className="text-xs text-gray-400">Transactions</p>
           </div>
           
@@ -506,7 +518,7 @@ export default function UserProfile() {
               <TrendingUp className="w-5 h-5 text-green-400" />
               <span className="text-xs text-gray-500">Success</span>
             </div>
-            <p className="text-xl font-bold text-white">{profile.stats.successfulTransactions}</p>
+            <p className="text-xl font-bold text-white">{stats.successfulTransactions}</p>
             <p className="text-xs text-gray-400">Completed</p>
           </div>
           
@@ -515,17 +527,19 @@ export default function UserProfile() {
               <DollarSign className="w-5 h-5 text-blue-400" />
               <span className="text-xs text-gray-500">Spent</span>
             </div>
-            <p className="text-xl font-bold text-white">{formatAmount(profile.stats.totalSpent)}</p>
+            <p className="text-xl font-bold text-white">{formatAmount(stats.totalSpent)}</p>
             <p className="text-xs text-gray-400">Total</p>
           </div>
           
           <div className="bg-gray-800 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
-              <Users className="w-5 h-5 text-purple-400" />
-              <span className="text-xs text-gray-500">Referrals</span>
+              <Calendar className="w-5 h-5 text-purple-400" />
+              <span className="text-xs text-gray-500">Member</span>
             </div>
-            <p className="text-xl font-bold text-white">{profile.referral.referralCount}</p>
-            <p className="text-xs text-gray-400">Users</p>
+            <p className="text-sm font-bold text-white">
+              {formatDate(profile.createdAt)}
+            </p>
+            <p className="text-xs text-gray-400">Since</p>
           </div>
         </div>
         
@@ -561,26 +575,18 @@ export default function UserProfile() {
           >
             Wallet
           </button>
-          <button
-            onClick={() => setActiveTab('api')}
-            className={`px-4 py-2 font-medium rounded-lg transition-colors whitespace-nowrap ${
-              activeTab === 'api'
-                ? 'bg-yellow-400 text-gray-900'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
-          >
-            API Access
-          </button>
-          <button
-            onClick={() => setActiveTab('referrals')}
-            className={`px-4 py-2 font-medium rounded-lg transition-colors whitespace-nowrap ${
-              activeTab === 'referrals'
-                ? 'bg-yellow-400 text-gray-900'
-                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-            }`}
-          >
-            Referrals
-          </button>
+          {profile.role !== 'agent' && (
+            <button
+              onClick={() => setActiveTab('api')}
+              className={`px-4 py-2 font-medium rounded-lg transition-colors whitespace-nowrap ${
+                activeTab === 'api'
+                  ? 'bg-yellow-400 text-gray-900'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              API Access
+            </button>
+          )}
         </div>
         
         {/* Success/Error Messages */}
@@ -631,9 +637,9 @@ export default function UserProfile() {
                       onClick={() => {
                         setEditMode({ ...editMode, personal: false });
                         setFormData({
-                          ...formData,
-                          fullName: profile.personalInfo.fullName,
-                          phone: profile.personalInfo.phone
+                          fullName: profile.fullName || '',
+                          phone: profile.phone || '',
+                          email: profile.email || ''
                         });
                       }}
                       className="px-3 py-1 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
@@ -655,20 +661,13 @@ export default function UserProfile() {
                       className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
                     />
                   ) : (
-                    <p className="text-white">{profile.personalInfo.fullName}</p>
+                    <p className="text-white">{profile.fullName}</p>
                   )}
                 </div>
                 
                 <div>
                   <label className="text-gray-400 text-sm mb-2 block">Email</label>
-                  <p className="text-white flex items-center gap-2">
-                    {profile.personalInfo.email}
-                    {profile.personalInfo.emailVerified && (
-                      <span className="text-green-400">
-                        <Check className="w-4 h-4" />
-                      </span>
-                    )}
-                  </p>
+                  <p className="text-white">{profile.email}</p>
                 </div>
                 
                 <div>
@@ -681,147 +680,42 @@ export default function UserProfile() {
                       className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
                     />
                   ) : (
-                    <p className="text-white">{profile.personalInfo.phone}</p>
+                    <p className="text-white">{profile.phone}</p>
                   )}
                 </div>
                 
                 <div>
                   <label className="text-gray-400 text-sm mb-2 block">Account Type</label>
-                  <p className="text-white capitalize">{profile.account.role}</p>
+                  <p className="text-white capitalize">{profile.role}</p>
+                </div>
+                
+                <div>
+                  <label className="text-gray-400 text-sm mb-2 block">Account Status</label>
+                  <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                    profile.status === 'active' ? 'bg-green-500 bg-opacity-20 text-green-400' : 
+                    profile.status === 'pending' ? 'bg-yellow-500 bg-opacity-20 text-yellow-400' :
+                    'bg-red-500 bg-opacity-20 text-red-400'
+                  }`}>
+                    {profile.status}
+                  </span>
                 </div>
                 
                 <div>
                   <label className="text-gray-400 text-sm mb-2 block">Member Since</label>
-                  <p className="text-white">{formatDate(profile.personalInfo.createdAt)}</p>
+                  <p className="text-white">{formatDate(profile.createdAt)}</p>
                 </div>
                 
                 <div>
                   <label className="text-gray-400 text-sm mb-2 block">Last Login</label>
-                  <p className="text-white">{formatDate(profile.personalInfo.lastLogin)}</p>
-                </div>
-              </div>
-              
-              {/* Address Section */}
-              <div className="border-t border-gray-700 pt-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="text-lg font-semibold text-white">Address Details</h4>
-                  {!editMode.address ? (
-                    <button
-                      onClick={() => setEditMode({ ...editMode, address: true })}
-                      className="px-3 py-1 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors flex items-center gap-2"
-                    >
-                      <Edit className="w-4 h-4" />
-                      Edit
-                    </button>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={updateAddressDetails}
-                        disabled={saving}
-                        className="px-3 py-1 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
-                      >
-                        <Save className="w-4 h-4" />
-                        Save
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditMode({ ...editMode, address: false });
-                          setFormData({
-                            ...formData,
-                            address: profile.profile.address || '',
-                            city: profile.profile.city || '',
-                            state: profile.profile.state || '',
-                            postalCode: profile.profile.postalCode || ''
-                          });
-                        }}
-                        className="px-3 py-1 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  )}
+                  <p className="text-white">{formatDate(profile.lastLogin)}</p>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2">
-                    <label className="text-gray-400 text-sm mb-2 block">Street Address</label>
-                    {editMode.address ? (
-                      <input
-                        type="text"
-                        value={formData.address}
-                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                        className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                        placeholder="Enter your street address"
-                      />
-                    ) : (
-                      <p className="text-white">{profile.profile.address || 'Not provided'}</p>
-                    )}
-                  </div>
-                  
+                {profile.createdBy && (
                   <div>
-                    <label className="text-gray-400 text-sm mb-2 block">City</label>
-                    {editMode.address ? (
-                      <input
-                        type="text"
-                        value={formData.city}
-                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                        className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                        placeholder="Enter city"
-                      />
-                    ) : (
-                      <p className="text-white">{profile.profile.city || 'Not provided'}</p>
-                    )}
+                    <label className="text-gray-400 text-sm mb-2 block">Created By</label>
+                    <p className="text-white">Admin</p>
                   </div>
-                  
-                  <div>
-                    <label className="text-gray-400 text-sm mb-2 block">State/Region</label>
-                    {editMode.address ? (
-                      <input
-                        type="text"
-                        value={formData.state}
-                        onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                        className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                        placeholder="Enter state"
-                      />
-                    ) : (
-                      <p className="text-white">{profile.profile.state || 'Not provided'}</p>
-                    )}
-                  </div>
-                  
-                  {profile.account.role !== 'agent' && (
-                    <>
-                      <div>
-                        <label className="text-gray-400 text-sm mb-2 block">Business Name</label>
-                        {editMode.address ? (
-                          <input
-                            type="text"
-                            value={formData.businessName}
-                            onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                            className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                            placeholder="Enter business name"
-                          />
-                        ) : (
-                          <p className="text-white">{profile.profile.businessName || 'Not provided'}</p>
-                        )}
-                      </div>
-                      
-                      <div>
-                        <label className="text-gray-400 text-sm mb-2 block">Tax ID</label>
-                        {editMode.address ? (
-                          <input
-                            type="text"
-                            value={formData.taxId}
-                            onChange={(e) => setFormData({ ...formData, taxId: e.target.value })}
-                            className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                            placeholder="Enter tax ID"
-                          />
-                        ) : (
-                          <p className="text-white">{profile.profile.taxId || 'Not provided'}</p>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -873,84 +767,48 @@ export default function UserProfile() {
               </div>
               
               {/* Transaction PIN */}
-              <div className="border-b border-gray-700 pb-6">
+              <div className="pb-6">
                 <h4 className="text-lg font-semibold text-white mb-4">Transaction PIN</h4>
-                {profile.wallet.pinEnabled ? (
-                  <div className="bg-gray-700 rounded-lg p-4">
-                    <p className="text-green-400 flex items-center gap-2">
-                      <Check className="w-5 h-5" />
-                      Transaction PIN is enabled
-                    </p>
-                    <p className="text-gray-400 text-sm mt-2">Your transactions are secured with a PIN</p>
-                  </div>
-                ) : (
+                <p className="text-gray-400 mb-4">Set a 4-digit PIN for additional transaction security</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-gray-400 mb-4">Set a 4-digit PIN for transaction security</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-gray-400 text-sm mb-2 block">4-Digit PIN</label>
-                        <div className="relative">
-                          <input
-                            type={pinData.showPin ? "text" : "password"}
-                            value={pinData.pin}
-                            onChange={(e) => setPinData({ ...pinData, pin: e.target.value })}
-                            maxLength="4"
-                            className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                            placeholder="••••"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setPinData({ ...pinData, showPin: !pinData.showPin })}
-                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-                          >
-                            {pinData.showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                          </button>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-gray-400 text-sm mb-2 block">Password</label>
-                        <input
-                          type="password"
-                          value={pinData.password}
-                          onChange={(e) => setPinData({ ...pinData, password: e.target.value })}
-                          className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
-                          placeholder="Enter your password"
-                        />
-                      </div>
+                    <label className="text-gray-400 text-sm mb-2 block">4-Digit PIN</label>
+                    <div className="relative">
+                      <input
+                        type={pinData.showPin ? "text" : "password"}
+                        value={pinData.pin}
+                        onChange={(e) => setPinData({ ...pinData, pin: e.target.value })}
+                        maxLength="4"
+                        className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                        placeholder="••••"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setPinData({ ...pinData, showPin: !pinData.showPin })}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                      >
+                        {pinData.showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
                     </div>
-                    <button
-                      onClick={setTransactionPin}
-                      disabled={saving || !pinData.pin || !pinData.password}
-                      className="mt-4 px-4 py-2 bg-yellow-400 text-gray-900 font-medium rounded-lg hover:bg-yellow-500 transition-colors disabled:opacity-50"
-                    >
-                      Set PIN
-                    </button>
                   </div>
-                )}
-              </div>
-              
-              {/* Two-Factor Authentication */}
-              <div>
-                <h4 className="text-lg font-semibold text-white mb-4">Two-Factor Authentication</h4>
-                {profile.account.twoFactorEnabled ? (
-                  <div className="bg-gray-700 rounded-lg p-4">
-                    <p className="text-green-400 flex items-center gap-2">
-                      <Shield className="w-5 h-5" />
-                      2FA is enabled
-                    </p>
-                    <p className="text-gray-400 text-sm mt-2">Your account is protected with two-factor authentication</p>
-                    <button className="mt-3 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
-                      Disable 2FA
-                    </button>
-                  </div>
-                ) : (
                   <div>
-                    <p className="text-gray-400 mb-4">Add an extra layer of security to your account</p>
-                    <button className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors">
-                      Enable 2FA
-                    </button>
+                    <label className="text-gray-400 text-sm mb-2 block">Password Confirmation</label>
+                    <input
+                      type="password"
+                      value={pinData.password}
+                      onChange={(e) => setPinData({ ...pinData, password: e.target.value })}
+                      className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                      placeholder="Enter your password"
+                    />
                   </div>
-                )}
+                </div>
+                <button
+                  onClick={setTransactionPin}
+                  disabled={saving || !pinData.pin || !pinData.password}
+                  className="mt-4 px-4 py-2 bg-yellow-400 text-gray-900 font-medium rounded-lg hover:bg-yellow-500 transition-colors disabled:opacity-50"
+                >
+                  Set PIN
+                </button>
               </div>
             </div>
           )}
@@ -960,38 +818,30 @@ export default function UserProfile() {
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-white mb-4">Wallet Information</h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <div className="bg-gray-700 rounded-lg p-4">
                   <p className="text-gray-400 text-sm mb-2">Available Balance</p>
-                  <p className="text-2xl font-bold text-yellow-400">{formatAmount(profile.wallet.balance)}</p>
+                  <p className="text-2xl font-bold text-yellow-400">{formatAmount(profile.wallet?.balance)}</p>
                 </div>
-                {profile.wallet.bonus > 0 && (
-                  <div className="bg-gray-700 rounded-lg p-4">
-                    <p className="text-gray-400 text-sm mb-2">Bonus Balance</p>
-                    <p className="text-2xl font-bold text-green-400">{formatAmount(profile.wallet.bonus)}</p>
-                  </div>
-                )}
-                {profile.wallet.commission > 0 && (
-                  <div className="bg-gray-700 rounded-lg p-4">
-                    <p className="text-gray-400 text-sm mb-2">Commission Earned</p>
-                    <p className="text-2xl font-bold text-blue-400">{formatAmount(profile.wallet.commission)}</p>
-                  </div>
-                )}
+                <div className="bg-gray-700 rounded-lg p-4">
+                  <p className="text-gray-400 text-sm mb-2">Currency</p>
+                  <p className="text-2xl font-bold text-white">{profile.wallet?.currency || 'GHS'}</p>
+                </div>
               </div>
               
               <div className="bg-gray-700 rounded-lg p-4">
-                <h4 className="text-lg font-semibold text-white mb-3">Wallet Security</h4>
+                <h4 className="text-lg font-semibold text-white mb-3">Wallet Status</h4>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-400">Transaction PIN</p>
-                    <p className="text-sm text-gray-500">Required for all transactions</p>
+                    <p className="text-gray-400">Wallet Lock Status</p>
+                    <p className="text-sm text-gray-500">Prevents transactions when locked</p>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    profile.wallet.pinEnabled 
-                      ? 'bg-green-500 bg-opacity-20 text-green-400' 
-                      : 'bg-yellow-500 bg-opacity-20 text-yellow-400'
+                    profile.wallet?.locked 
+                      ? 'bg-red-500 bg-opacity-20 text-red-400' 
+                      : 'bg-green-500 bg-opacity-20 text-green-400'
                   }`}>
-                    {profile.wallet.pinEnabled ? 'Enabled' : 'Not Set'}
+                    {profile.wallet?.locked ? 'Locked' : 'Active'}
                   </span>
                 </div>
               </div>
@@ -999,11 +849,11 @@ export default function UserProfile() {
           )}
           
           {/* API Access Tab */}
-          {activeTab === 'api' && (
+          {activeTab === 'api' && profile.role !== 'agent' && (
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-white mb-4">API Access</h3>
               
-              {profile.apiAccess.enabled ? (
+              {profile.apiAccess?.enabled ? (
                 <div className="space-y-4">
                   <div className="bg-gray-700 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
@@ -1014,23 +864,25 @@ export default function UserProfile() {
                     </div>
                     
                     <div className="space-y-3">
-                      <div>
-                        <label className="text-gray-400 text-sm mb-1 block">API Key</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={profile.apiAccess.apiKey}
-                            readOnly
-                            className="flex-1 px-3 py-2 bg-gray-800 text-white rounded-lg font-mono text-sm"
-                          />
-                          <button
-                            onClick={() => copyToClipboard(profile.apiAccess.apiKey, 'API Key')}
-                            className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
-                          >
-                            <Copy className="w-4 h-4" />
-                          </button>
+                      {profile.apiAccess.apiKey && (
+                        <div>
+                          <label className="text-gray-400 text-sm mb-1 block">API Key</label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={profile.apiAccess.apiKey}
+                              readOnly
+                              className="flex-1 px-3 py-2 bg-gray-800 text-white rounded-lg font-mono text-sm"
+                            />
+                            <button
+                              onClick={() => copyToClipboard(profile.apiAccess.apiKey, 'API Key')}
+                              className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
+                            >
+                              <Copy className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      )}
                       
                       {apiKeyData.apiSecret && (
                         <div className="p-3 bg-yellow-500 bg-opacity-10 border border-yellow-500 rounded-lg">
@@ -1052,38 +904,22 @@ export default function UserProfile() {
                         </div>
                       )}
                       
-                      <div>
-                        <label className="text-gray-400 text-sm mb-1 block">Webhook URL</label>
-                        <input
-                          type="url"
-                          value={profile.apiAccess.webhookUrl || ''}
-                          placeholder="https://your-domain.com/webhook"
-                          className="w-full px-3 py-2 bg-gray-800 text-white rounded-lg"
-                          readOnly
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-gray-700 rounded-lg p-3">
-                      <p className="text-gray-400 text-sm">Requests</p>
-                      <p className="text-xl font-bold text-white">{profile.apiAccess.requestCount}</p>
-                    </div>
-                    <div className="bg-gray-700 rounded-lg p-3">
-                      <p className="text-gray-400 text-sm">Rate Limit</p>
-                      <p className="text-xl font-bold text-white">100/hour</p>
-                    </div>
-                    <div className="bg-gray-700 rounded-lg p-3">
-                      <p className="text-gray-400 text-sm">Last Used</p>
-                      <p className="text-sm text-white">
-                        {profile.apiAccess.lastUsed ? formatDate(profile.apiAccess.lastUsed) : 'Never'}
-                      </p>
+                      {profile.apiAccess.webhookUrl && (
+                        <div>
+                          <label className="text-gray-400 text-sm mb-1 block">Webhook URL</label>
+                          <input
+                            type="url"
+                            value={profile.apiAccess.webhookUrl}
+                            readOnly
+                            className="w-full px-3 py-2 bg-gray-800 text-white rounded-lg"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                   
                   <button className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
-                    Regenerate Secret
+                    Regenerate Credentials
                   </button>
                 </div>
               ) : (
@@ -1106,82 +942,6 @@ export default function UserProfile() {
                       Generate API Key
                     </button>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Referrals Tab */}
-          {activeTab === 'referrals' && (
-            <div className="space-y-6">
-              <h3 className="text-xl font-bold text-white mb-4">Referral Program</h3>
-              
-              <div className="bg-gray-700 rounded-lg p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-lg font-semibold text-white">Your Referral Code</h4>
-                  <UserPlus className="w-6 h-6 text-yellow-400" />
-                </div>
-                
-                {profile.referral.referralCode ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={profile.referral.referralCode}
-                        readOnly
-                        className="flex-1 px-4 py-3 bg-gray-800 text-white rounded-lg font-bold text-lg text-center"
-                      />
-                      <button
-                        onClick={() => copyToClipboard(profile.referral.referralCode, 'Referral code')}
-                        className="px-4 py-3 bg-yellow-400 text-gray-900 rounded-lg hover:bg-yellow-500 transition-colors"
-                      >
-                        <Copy className="w-5 h-5" />
-                      </button>
-                    </div>
-                    
-                    <div>
-                      <p className="text-gray-400 text-sm mb-1">Referral Link</p>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={`https://platform.com/register?ref=${profile.referral.referralCode}`}
-                          readOnly
-                          className="flex-1 px-3 py-2 bg-gray-800 text-white rounded-lg text-sm"
-                        />
-                        <button
-                          onClick={() => copyToClipboard(`https://platform.com/register?ref=${profile.referral.referralCode}`, 'Referral link')}
-                          className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors"
-                        >
-                          <Link2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center">
-                    <p className="text-gray-400 mb-4">Generate your unique referral code to start earning</p>
-                    <button className="px-4 py-2 bg-yellow-400 text-gray-900 font-medium rounded-lg hover:bg-yellow-500 transition-colors">
-                      Generate Referral Code
-                    </button>
-                  </div>
-                )}
-              </div>
-              
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-gray-700 rounded-lg p-4">
-                  <p className="text-gray-400 text-sm">Total Referrals</p>
-                  <p className="text-2xl font-bold text-white">{profile.referral.referralCount}</p>
-                </div>
-                <div className="bg-gray-700 rounded-lg p-4">
-                  <p className="text-gray-400 text-sm">Total Earned</p>
-                  <p className="text-2xl font-bold text-green-400">{formatAmount(profile.referral.referralEarnings)}</p>
-                </div>
-              </div>
-              
-              {profile.referral.referredBy && (
-                <div className="bg-gray-700 rounded-lg p-4">
-                  <p className="text-gray-400 text-sm mb-1">Referred By</p>
-                  <p className="text-white font-medium">{profile.referral.referredBy.name}</p>
                 </div>
               )}
             </div>
