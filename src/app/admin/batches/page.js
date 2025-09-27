@@ -50,7 +50,7 @@ export default function BatchesPage() {
         ...(statusFilter && { status: statusFilter })
       });
 
-      const response = await fetch(`http://localhost:5000/api/admin/batches?${params}`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/batches?${params}`, {
         headers: { 'x-auth-token': token }
       });
 
@@ -69,7 +69,7 @@ export default function BatchesPage() {
   const fetchBatchStats = async () => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch('http://localhost:5000/api/admin/batches/stats', {
+      const response = await fetch('https://server-datamart-reseller.onrender.com/api/admin/batches/stats', {
         headers: { 'x-auth-token': token }
       });
 
@@ -85,7 +85,7 @@ export default function BatchesPage() {
   const viewBatchDetails = async (batch) => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`http://localhost:5000/api/admin/batches/${batch._id}`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/batches/${batch._id}`, {
         headers: { 'x-auth-token': token }
       });
 
@@ -103,7 +103,7 @@ export default function BatchesPage() {
   const reExportBatch = async (batchId) => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`http://localhost:5000/api/admin/batches/${batchId}/re-export`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/batches/${batchId}/re-export`, {
         method: 'POST',
         headers: { 'x-auth-token': token }
       });

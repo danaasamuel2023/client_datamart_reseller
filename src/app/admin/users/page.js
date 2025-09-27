@@ -100,7 +100,7 @@ export default function UserManagementPage() {
         ...(statusFilter && { status: statusFilter })
       });
       
-      const response = await fetch(`http://localhost:5000/api/admin/users?${params}`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users?${params}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -119,7 +119,7 @@ export default function UserManagementPage() {
   const handleStatusChange = async (userId, newStatus, reason = '') => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`http://localhost:5000/api/admin/users/${userId}/status`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users/${userId}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -142,7 +142,7 @@ export default function UserManagementPage() {
   const handleEditUser = async () => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`http://localhost:5000/api/admin/users/${selectedUser._id}`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users/${selectedUser._id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -171,7 +171,7 @@ export default function UserManagementPage() {
 
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`http://localhost:5000/api/admin/wallet/adjust`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/wallet/adjust`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -213,7 +213,7 @@ export default function UserManagementPage() {
 
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`http://localhost:5000/api/admin/users/${selectedUser._id}/reset-password`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users/${selectedUser._id}/reset-password`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -237,7 +237,7 @@ export default function UserManagementPage() {
   const handleGenerateApiKey = async () => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`http://localhost:5000/api/admin/users/${selectedUser._id}/generate-api-key`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users/${selectedUser._id}/generate-api-key`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -265,7 +265,7 @@ export default function UserManagementPage() {
 
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`http://localhost:5000/api/admin/users/${userId}/revoke-api-access`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users/${userId}/revoke-api-access`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -286,7 +286,7 @@ export default function UserManagementPage() {
 
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`http://localhost:5000/api/admin/users/${userId}`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users/${userId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -305,7 +305,7 @@ export default function UserManagementPage() {
   const handleCreateUser = async () => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`http://localhost:5000/api/admin/users`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -60,7 +60,7 @@ export default function TransactionsPage() {
         ...(endDate && { endDate })
       });
 
-      const response = await fetch(`http://localhost:5000/api/admin/transactions?${params}`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/transactions?${params}`, {
         headers: { 'x-auth-token': token }
       });
 
@@ -79,7 +79,7 @@ export default function TransactionsPage() {
   const handleStatusUpdate = async (transactionId, newStatus, reason) => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`http://localhost:5000/api/admin/transactions/${transactionId}/status`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/transactions/${transactionId}/status`, {
         method: 'PATCH',
         headers: {
           'x-auth-token': token,
@@ -119,7 +119,7 @@ export default function TransactionsPage() {
 
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch('http://localhost:5000/api/admin/transactions/bulk-status-update', {
+      const response = await fetch('https://server-datamart-reseller.onrender.com/api/admin/transactions/bulk-status-update', {
         method: 'POST',
         headers: {
           'x-auth-token': token,
@@ -146,7 +146,7 @@ export default function TransactionsPage() {
   const handleExportPreview = async () => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch('http://localhost:5000/api/admin/orders/export/preview', {
+      const response = await fetch('https://server-datamart-reseller.onrender.com/api/admin/orders/export/preview', {
         method: 'POST',
         headers: {
           'x-auth-token': token,
@@ -191,7 +191,7 @@ export default function TransactionsPage() {
         return;
       }
 
-      const response = await fetch('http://localhost:5000/api/admin/orders/export/excel', {
+      const response = await fetch('https://server-datamart-reseller.onrender.com/api/admin/orders/export/excel', {
         method: 'POST',
         headers: {
           'x-auth-token': token,
@@ -266,7 +266,7 @@ export default function TransactionsPage() {
 
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`http://localhost:5000/api/admin/transactions/${transactionId}/reverse`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/transactions/${transactionId}/reverse`, {
         method: 'POST',
         headers: {
           'x-auth-token': token,
@@ -292,7 +292,7 @@ export default function TransactionsPage() {
 
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`http://localhost:5000/api/admin/transactions/${transactionId}/retry`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/transactions/${transactionId}/retry`, {
         method: 'POST',
         headers: {
           'x-auth-token': token
@@ -314,7 +314,7 @@ export default function TransactionsPage() {
   const viewDetails = async (transactionId) => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`http://localhost:5000/api/admin/transactions/${transactionId}`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/transactions/${transactionId}`, {
         headers: { 'x-auth-token': token }
       });
 
@@ -337,7 +337,7 @@ export default function TransactionsPage() {
         ...(endDate && { endDate })
       });
 
-      const response = await fetch(`http://localhost:5000/api/admin/reports/export/transactions?${params}`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/reports/export/transactions?${params}`, {
         headers: { 'x-auth-token': token }
       });
 

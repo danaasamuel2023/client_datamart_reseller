@@ -42,7 +42,7 @@ import {
 } from 'lucide-react';
 
 // API Base URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://server-datamart-reseller.onrender.com/api';
 
 export default function DataMartMainPage() {
   const router = useRouter();

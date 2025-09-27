@@ -77,16 +77,16 @@ export default function AdminDashboard() {
       
       // Fetch all dashboard data
       const [statsRes, revenueRes, productsRes, transactionsRes] = await Promise.all([
-        fetch('http://localhost:5000/api/admin/dashboard/stats', {
+        fetch('https://server-datamart-reseller.onrender.com/api/admin/dashboard/stats', {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch(`http://localhost:5000/api/admin/dashboard/revenue?period=${period}`, {
+        fetch(`https://server-datamart-reseller.onrender.com/api/admin/dashboard/revenue?period=${period}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch('http://localhost:5000/api/admin/dashboard/top-products?limit=5', {
+        fetch('https://server-datamart-reseller.onrender.com/api/admin/dashboard/top-products?limit=5', {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch('http://localhost:5000/api/admin/transactions?limit=10', {
+        fetch('https://server-datamart-reseller.onrender.com/api/admin/transactions?limit=10', {
           headers: { 'Authorization': `Bearer ${token}` }
         })
       ]);

@@ -71,7 +71,7 @@ export default function WalletPage() {
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch('http://localhost:5000/api/admin/wallet-stats', {
+      const response = await fetch('https://server-datamart-reseller.onrender.com/api/admin/wallet-stats', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -106,7 +106,7 @@ export default function WalletPage() {
         ...(endDate && { endDate })
       });
 
-      const response = await fetch(`http://localhost:5000/api/admin/wallet-transactions?${params}`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/wallet-transactions?${params}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -125,7 +125,7 @@ export default function WalletPage() {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch('http://localhost:5000/api/admin/users?limit=100', {
+      const response = await fetch('https://server-datamart-reseller.onrender.com/api/admin/users?limit=100', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -142,7 +142,7 @@ export default function WalletPage() {
     e.preventDefault();
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch('http://localhost:5000/api/admin/wallet/adjust', {
+      const response = await fetch('https://server-datamart-reseller.onrender.com/api/admin/wallet/adjust', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

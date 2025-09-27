@@ -69,7 +69,7 @@ export default function ApiManagementPage() {
       setLoading(true);
       const token = localStorage.getItem('adminToken');
       
-      const response = await fetch('http://localhost:5000/api/admin/users?limit=100', {
+      const response = await fetch('https://server-datamart-reseller.onrender.com/api/admin/users?limit=100', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -90,7 +90,7 @@ export default function ApiManagementPage() {
       setLoading(true);
       const token = localStorage.getItem('adminToken');
       
-      const response = await fetch('http://localhost:5000/api/admin/api-logs?limit=50', {
+      const response = await fetch('https://server-datamart-reseller.onrender.com/api/admin/api-logs?limit=50', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -110,7 +110,7 @@ export default function ApiManagementPage() {
       setLoading(true);
       const token = localStorage.getItem('adminToken');
       
-      const response = await fetch('http://localhost:5000/api/admin/api-stats', {
+      const response = await fetch('https://server-datamart-reseller.onrender.com/api/admin/api-stats', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -133,7 +133,7 @@ export default function ApiManagementPage() {
 
     try {
       const token = localStorage.getItem('adminToken');
-      const response = await fetch(`http://localhost:5000/api/admin/users/${selectedUser}/generate-api-key`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users/${selectedUser}/generate-api-key`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -159,7 +159,7 @@ export default function ApiManagementPage() {
 
     try {
       const token = localStorage.getItem('adminToken');
-      const response = await fetch(`http://localhost:5000/api/admin/users/${userId}/revoke-api-access`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users/${userId}/revoke-api-access`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

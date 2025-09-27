@@ -70,7 +70,7 @@ export default function ProductsPage() {
         ...(searchTerm && { search: searchTerm })
       });
 
-      const response = await fetch(`http://localhost:5000/api/admin/products?${params}`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/products?${params}`, {
         headers: { 
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -186,7 +186,7 @@ export default function ProductsPage() {
       
       console.log('Sending product data:', productPayload);
       
-      const response = await fetch('http://localhost:5000/api/admin/products', {
+      const response = await fetch('https://server-datamart-reseller.onrender.com/api/admin/products', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -273,7 +273,7 @@ export default function ProductsPage() {
         status: formData.status
       };
       
-      const response = await fetch(`http://localhost:5000/api/admin/products/${selectedProduct._id}`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/products/${selectedProduct._id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -325,7 +325,7 @@ export default function ProductsPage() {
     
     console.log('Sending pricing data:', prices);
     
-    const response = await fetch(`http://localhost:5000/api/admin/products/${selectedProduct._id}/pricing`, {
+    const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/products/${selectedProduct._id}/pricing`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -356,7 +356,7 @@ export default function ProductsPage() {
   const handleStatusChange = async (productId, newStatus) => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`http://localhost:5000/api/admin/products/${productId}/status`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/products/${productId}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -383,7 +383,7 @@ export default function ProductsPage() {
 
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`http://localhost:5000/api/admin/products/${productId}`, {
+      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/products/${productId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
