@@ -1,8 +1,9 @@
-// app/page.jsx - DATAMART COMPLETE RESPONSIVE MAIN PAGE WITH API INTEGRATION
+// app/page.jsx - DATAMART ENHANCED WITH PROPER EXCEL PROCESSING
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import * as XLSX from 'xlsx';
 import { 
   ShoppingCart, 
   X, 
@@ -15,6 +16,7 @@ import {
   Download,
   AlertCircle,
   ChevronDown,
+  ChevronUp,
   User,
   Wallet,
   Package,
@@ -38,7 +40,11 @@ import {
   CheckCircle,
   XCircle,
   Info,
-  Zap
+  Zap,
+  Eye,
+  EyeOff,
+  Trash2,
+  Edit2
 } from 'lucide-react';
 
 // API Base URL
@@ -71,11 +77,16 @@ export default function DataMartMainPage() {
   const [processingBulk, setProcessingBulk] = useState(false);
   const [bulkErrors, setBulkErrors] = useState([]);
   const [bulkParseProgress, setBulkParseProgress] = useState('');
-  const [showBulkModal, setShowBulkModal] = useState(false);
-  const [bulkModalType, setBulkModalType] = useState(''); // 'success' or 'error'
-  const [bulkModalMessage, setBulkModalMessage] = useState('');
   const [manualBulkInput, setManualBulkInput] = useState('');
   const [bulkInputMode, setBulkInputMode] = useState('file'); // 'file' or 'manual'
+  const [showPreview, setShowPreview] = useState(true);
+  const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'valid', 'invalid'
+  const [bulkSummary, setBulkSummary] = useState({
+    total: 0,
+    valid: 0,
+    invalid: 0,
+    totalCost: 0
+  });
   
   const fileInputRef = useRef(null);
 
@@ -200,6 +211,7 @@ export default function DataMartMainPage() {
             `${product.capacity.value}${product.capacity.unit}` : // Show value with unit (e.g., "1GB", "500MB")
             'N/A',
           capacityValue: product.capacity?.value || 0, // Store numeric value for matching
+          capacityUnit: product.capacity?.unit || 'GB',
           price: product.price || product.userPrice || 0,
           validity: product.validity ? 
             `${product.validity.value} ${product.validity.unit}` : 
@@ -245,22 +257,7 @@ export default function DataMartMainPage() {
           <Shield className="w-16 h-16 text-yellow-400 mx-auto mb-4 animate-pulse" />
           <Loader2 className="w-12 h-12 animate-spin text-yellow-400 mx-auto mb-4" />
           <p className="text-white text-lg">Verifying authentication...</p>
-          <style jsx global>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: scale(0.9);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
-      `}</style>
-    </div>
+        </div>
       </div>
     );
   }
@@ -281,9 +278,52 @@ export default function DataMartMainPage() {
     }
   };
 
+  // Format phone number helper
+  const formatPhoneNumber = (phone) => {
+    if (!phone) return '';
+    let cleaned = String(phone).replace(/\D/g, '');
+    
+    // Handle different formats
+    if (cleaned.startsWith('233')) {
+      cleaned = '0' + cleaned.substring(3);
+    } else if (cleaned.length === 9 && !cleaned.startsWith('0')) {
+      cleaned = '0' + cleaned;
+    }
+    
+    return cleaned;
+  };
+
   const validatePhoneNumber = (number) => {
-    const phoneRegex = /^(\+233|0)[2-9][0-9]{8}$/;
-    return phoneRegex.test(number);
+    const formatted = formatPhoneNumber(number);
+    const phoneRegex = /^0[2-9][0-9]{8}$/;
+    return phoneRegex.test(formatted);
+  };
+
+  // Parse capacity value helper
+  const parseCapacityValue = (value) => {
+    if (!value) return null;
+    
+    const strValue = String(value).trim().toLowerCase();
+    
+    // Remove common units and spaces
+    let cleanValue = strValue.replace(/\s*(gb|gig|gigabyte|mb|megabyte|meg)\s*/gi, '');
+    
+    // Check if it's MB (500MB case)
+    if (strValue.includes('mb') || strValue.includes('megabyte')) {
+      const mbValue = parseFloat(cleanValue);
+      if (!isNaN(mbValue)) {
+        // Convert MB to value that matches product (500MB = 500 in products)
+        return mbValue;
+      }
+    }
+    
+    // Parse as GB
+    const gbValue = parseFloat(cleanValue);
+    if (!isNaN(gbValue) && gbValue > 0 && gbValue <= 1000) {
+      return gbValue;
+    }
+    
+    return null;
   };
 
   const handleAddToCart = () => {
@@ -384,29 +424,230 @@ export default function DataMartMainPage() {
     }
   };
 
-  const handleFileUpload = (event) => {
+  // ENHANCED FILE UPLOAD WITH PROPER EXCEL PARSING
+  const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (!file.name.match(/\.(xlsx|xls|csv)$/)) {
-      setError('Please upload a valid Excel or CSV file');
-      setBulkErrors(['Invalid file format. Please use .xlsx, .xls, or .csv']);
+    const fileExtension = file.name.split('.').pop().toLowerCase();
+    if (!['xlsx', 'xls', 'csv'].includes(fileExtension)) {
+      setError('Please upload a valid Excel (.xlsx, .xls) or CSV (.csv) file');
       return;
     }
 
     setBulkFile(file);
     setError('');
     setBulkErrors([]);
-    setBulkParseProgress('Parsing file...');
-    parseBulkFile(file);
+    setBulkParseProgress('Reading file...');
+    
+    if (fileExtension === 'csv') {
+      parseCSVFile(file);
+    } else {
+      parseExcelFile(file);
+    }
+  };
+
+  // Parse Excel file with XLSX
+  const parseExcelFile = async (file) => {
+    try {
+      setBulkParseProgress('Parsing Excel file...');
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+          
+          // Get first sheet
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          
+          // Convert to JSON with header
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+          
+          if (jsonData.length < 2) {
+            setError('File is empty or has no data rows');
+            setBulkParseProgress('');
+            return;
+          }
+          
+          // Process data
+          processFileData(jsonData);
+          
+        } catch (error) {
+          setError('Failed to parse Excel file: ' + error.message);
+          setBulkParseProgress('');
+        }
+      };
+      
+      reader.onerror = () => {
+        setError('Failed to read file');
+        setBulkParseProgress('');
+      };
+      
+      reader.readAsArrayBuffer(file);
+      
+    } catch (error) {
+      setError('Failed to process Excel file: ' + error.message);
+      setBulkParseProgress('');
+    }
+  };
+
+  // Parse CSV file
+  const parseCSVFile = async (file) => {
+    try {
+      setBulkParseProgress('Parsing CSV file...');
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target.result;
+        const lines = content.split('\n').filter(line => line.trim());
+        
+        if (lines.length < 2) {
+          setError('File is empty or has no data rows');
+          setBulkParseProgress('');
+          return;
+        }
+        
+        // Convert CSV to 2D array format like Excel
+        const data = lines.map(line => line.split(',').map(cell => cell.trim()));
+        processFileData(data);
+      };
+      
+      reader.onerror = () => {
+        setError('Failed to read CSV file');
+        setBulkParseProgress('');
+      };
+      
+      reader.readAsText(file);
+      
+    } catch (error) {
+      setError('Failed to process CSV file: ' + error.message);
+      setBulkParseProgress('');
+    }
+  };
+
+  // Process file data (both Excel and CSV)
+  const processFileData = (data) => {
+    const orders = [];
+    const errors = [];
+    
+    // Get headers (first row)
+    const headers = data[0].map(h => String(h).toLowerCase().trim());
+    
+    // Find column indices
+    let phoneColumnIndex = headers.findIndex(h => 
+      h.includes('number') || h.includes('phone') || h.includes('beneficiary') || h.includes('mobile')
+    );
+    let capacityColumnIndex = headers.findIndex(h => 
+      h.includes('capacity') || h.includes('data') || h.includes('gb') || h.includes('bundle')
+    );
+    
+    if (phoneColumnIndex === -1 || capacityColumnIndex === -1) {
+      setError('Invalid file format. Required columns: phone/number and capacity/data');
+      setBulkParseProgress('');
+      return;
+    }
+    
+    // Process rows (skip header, max 100 rows)
+    const maxRows = Math.min(data.length - 1, 100);
+    
+    for (let i = 1; i <= maxRows; i++) {
+      const row = data[i];
+      if (!row || row.every(cell => !cell)) continue; // Skip empty rows
+      
+      const phoneValue = row[phoneColumnIndex] || '';
+      const capacityValue = row[capacityColumnIndex] || '';
+      
+      // Format and validate phone
+      const formattedPhone = formatPhoneNumber(phoneValue);
+      const isValidPhone = validatePhoneNumber(formattedPhone);
+      
+      // Parse capacity
+      const parsedCapacity = parseCapacityValue(capacityValue);
+      
+      // Find matching product
+      let product = null;
+      if (parsedCapacity !== null) {
+        // Try to match by capacity value
+        product = products.find(p => {
+          // Handle MB products (500MB)
+          if (p.capacityUnit === 'MB' && parsedCapacity === 500) {
+            return p.capacityValue === 500;
+          }
+          // Handle GB products
+          return p.capacityValue === parsedCapacity;
+        });
+      }
+      
+      // Build error messages
+      const rowErrors = [];
+      if (!phoneValue) {
+        rowErrors.push('Missing phone number');
+      } else if (!isValidPhone) {
+        rowErrors.push(`Invalid phone: ${phoneValue}`);
+      }
+      
+      if (!capacityValue) {
+        rowErrors.push('Missing capacity');
+      } else if (parsedCapacity === null) {
+        rowErrors.push(`Invalid capacity: ${capacityValue}`);
+      } else if (!product) {
+        rowErrors.push(`No product for ${parsedCapacity}${parsedCapacity === 500 ? 'MB' : 'GB'}`);
+      }
+      
+      orders.push({
+        row: i,
+        originalPhone: phoneValue,
+        formattedPhone: formattedPhone,
+        originalCapacity: capacityValue,
+        parsedCapacity: parsedCapacity,
+        productId: product?.id || null,
+        productCode: product?.productCode || '',
+        productName: product?.name || 'Not Found',
+        capacity: product?.capacity || '-',
+        beneficiary: formattedPhone,
+        price: product?.price || 0,
+        isValid: isValidPhone && product !== null,
+        errors: rowErrors,
+        status: 'pending'
+      });
+      
+      if (rowErrors.length > 0) {
+        errors.push(`Row ${i}: ${rowErrors.join(', ')}`);
+      }
+    }
+    
+    if (data.length > 101) {
+      errors.push(`Note: Only first 100 rows processed (file has ${data.length - 1} rows)`);
+    }
+    
+    // Update state
+    setBulkOrders(orders);
+    setBulkErrors(errors);
+    setBulkParseProgress('');
+    
+    // Calculate summary
+    const validOrders = orders.filter(o => o.isValid);
+    setBulkSummary({
+      total: orders.length,
+      valid: validOrders.length,
+      invalid: orders.length - validOrders.length,
+      totalCost: validOrders.reduce((sum, o) => sum + o.price, 0)
+    });
+    
+    // Show success message
+    if (validOrders.length > 0) {
+      setSuccess(`Loaded ${validOrders.length} valid orders from ${orders.length} rows`);
+    } else {
+      setError(`No valid orders found in ${orders.length} rows. Please check your data.`);
+    }
   };
 
   const handleManualBulkAdd = () => {
     const lines = manualBulkInput.trim().split('\n').filter(line => line.trim());
     if (lines.length === 0) {
-      setBulkModalType('error');
-      setBulkModalMessage('Please enter at least one order in the format: phone_number capacity');
-      setShowBulkModal(true);
+      setError('Please enter at least one order in the format: phone_number capacity');
       return;
     }
     
@@ -420,183 +661,71 @@ export default function DataMartMainPage() {
         return;
       }
       
-      const phoneNumber = parts[0];
-      const capacity = parts[1];
+      const phoneNumber = formatPhoneNumber(parts[0]);
+      const capacity = parseCapacityValue(parts[1]);
       
       if (!validatePhoneNumber(phoneNumber)) {
-        errors.push(`Line ${index + 1}: Invalid phone number: ${phoneNumber}`);
-        return;
+        errors.push(`Line ${index + 1}: Invalid phone number: ${parts[0]}`);
       }
       
       const product = products.find(p => {
-        return p.capacityValue === parseInt(capacity);
+        if (capacity === 500 && p.capacityUnit === 'MB') {
+          return p.capacityValue === 500;
+        }
+        return p.capacityValue === capacity;
       });
       
       if (!product) {
-        errors.push(`Line ${index + 1}: Product not found for capacity: ${capacity}`);
-        return;
+        errors.push(`Line ${index + 1}: Product not found for capacity: ${parts[1]}`);
       }
       
       orders.push({
         row: index + 1,
-        productCode: product.productCode,
-        productId: product.id,
-        productName: product.name,
-        capacity: product.capacity,
+        originalPhone: parts[0],
+        formattedPhone: phoneNumber,
+        originalCapacity: parts[1],
+        parsedCapacity: capacity,
+        productCode: product?.productCode || '',
+        productId: product?.id || null,
+        productName: product?.name || 'Not Found',
+        capacity: product?.capacity || '-',
         beneficiary: phoneNumber,
-        quantity: 1,
-        price: product.price,
+        price: product?.price || 0,
+        isValid: validatePhoneNumber(phoneNumber) && product !== null,
+        errors: errors.filter(e => e.includes(`Line ${index + 1}`)).map(e => e.split(': ')[1]),
         status: 'pending'
       });
     });
     
-    if (errors.length > 0) {
-      setBulkErrors(errors);
-      setBulkModalType('error');
-      setBulkModalMessage(`Found ${errors.length} errors while processing manual input`);
-      setShowBulkModal(true);
-    }
-    
     if (orders.length > 0) {
       setBulkOrders(prev => [...prev, ...orders]);
-      setBulkModalType('success');
-      setBulkModalMessage(`Successfully added ${orders.length} orders from manual input`);
-      setShowBulkModal(true);
+      const validOrders = orders.filter(o => o.isValid);
+      setBulkSummary({
+        total: bulkOrders.length + orders.length,
+        valid: bulkOrders.filter(o => o.isValid).length + validOrders.length,
+        invalid: bulkOrders.filter(o => !o.isValid).length + orders.filter(o => !o.isValid).length,
+        totalCost: bulkOrders.filter(o => o.isValid).reduce((sum, o) => sum + o.price, 0) + 
+                   validOrders.reduce((sum, o) => sum + o.price, 0)
+      });
+      
+      setSuccess(`Added ${validOrders.length} valid orders from ${orders.length} lines`);
       setManualBulkInput('');
     }
-  };
-
-  const parseBulkFile = async (file) => {
-    try {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = e.target.result;
-        const lines = content.split('\n').filter(line => line.trim());
-        const orders = [];
-        const errors = [];
-        
-        if (lines.length < 2) {
-          errors.push('File is empty or has no data rows');
-          setBulkErrors(errors);
-          setBulkParseProgress('');
-          return;
-        }
-        
-        // Parse header to identify column mapping
-        const header = lines[0].toLowerCase().split(',').map(h => h.trim());
-        
-        // Check for valid column combinations
-        const hasNumber = header.includes('number');
-        const hasBeneficiary = header.includes('beneficiary');
-        const hasCapacity = header.includes('capacity');
-        
-        if (!hasCapacity || (!hasNumber && !hasBeneficiary)) {
-          errors.push('Invalid file format. Required columns: (number OR beneficiary) AND capacity');
-          errors.push('Current columns found: ' + header.join(', '));
-          setBulkErrors(errors);
-          setBulkParseProgress('');
-          return;
-        }
-        
-        // Determine which column to use for phone number
-        const phoneColumnName = hasNumber ? 'number' : 'beneficiary';
-        const phoneColumnIndex = header.indexOf(phoneColumnName);
-        const capacityColumnIndex = header.indexOf('capacity');
-        
-        // Process rows (up to 100)
-        const maxRows = Math.min(lines.length - 1, 100);
-        
-        for (let i = 1; i <= maxRows; i++) {
-          const row = lines[i].split(',').map(s => s.trim());
-          
-          if (row.length < header.length) {
-            errors.push(`Row ${i}: Incomplete data (expected ${header.length} columns, got ${row.length})`);
-            continue;
-          }
-          
-          const phoneNumber = row[phoneColumnIndex];
-          const capacity = row[capacityColumnIndex];
-          
-          // Validate phone number
-          if (!phoneNumber) {
-            errors.push(`Row ${i}: Missing phone number`);
-            continue;
-          }
-          
-          if (!validatePhoneNumber(phoneNumber)) {
-            errors.push(`Row ${i}: Invalid phone number format: ${phoneNumber}`);
-            continue;
-          }
-          
-          // Validate capacity and find matching product
-          if (!capacity) {
-            errors.push(`Row ${i}: Missing capacity`);
-            continue;
-          }
-          
-          // Find matching product by capacity (direct match with numeric value)
-          const product = products.find(p => {
-            return p.capacityValue === parseInt(capacity);
-          });
-          
-          if (!product) {
-            errors.push(`Row ${i}: Product not found for capacity: ${capacity}`);
-            continue;
-          }
-          
-          orders.push({
-            row: i,
-            productCode: product.productCode,
-            productId: product.id,
-            productName: product.name,
-            capacity: product.capacity,
-            beneficiary: phoneNumber,
-            quantity: 1,
-            price: product.price,
-            status: 'pending'
-          });
-        }
-        
-        if (lines.length > 101) { // Header + 100 data rows
-          errors.push(`Warning: Only first 100 orders processed (file has ${lines.length - 1} data rows)`);
-        }
-        
-        setBulkOrders(orders);
-        
-        if (errors.length > 0) {
-          setBulkErrors(errors);
-          setBulkModalType('error');
-          setBulkModalMessage(`Found ${errors.length} issues while processing the file. ${orders.length} valid orders were loaded.`);
-          setShowBulkModal(true);
-        } else if (orders.length > 0) {
-          setBulkModalType('success');
-          setBulkModalMessage(`Successfully parsed ${orders.length} valid orders from file!`);
-          setShowBulkModal(true);
-        } else {
-          setBulkModalType('error');
-          setBulkModalMessage('No valid orders found in file. Please check your file format.');
-          setShowBulkModal(true);
-        }
-        
-        setBulkParseProgress(`Loaded ${orders.length} orders`);
-      };
-      reader.readAsText(file);
-    } catch (error) {
-      setBulkModalType('error');
-      setBulkModalMessage('Failed to parse file: ' + error.message);
-      setBulkErrors(['Failed to parse file: ' + error.message]);
-      setShowBulkModal(true);
-      setBulkParseProgress('');
+    
+    if (errors.length > 0) {
+      setBulkErrors(errors);
     }
   };
 
   const processBulkOrders = async () => {
-    if (bulkOrders.length === 0) {
-      setError('No orders to process');
+    const validOrders = bulkOrders.filter(o => o.isValid);
+    
+    if (validOrders.length === 0) {
+      setError('No valid orders to process');
       return;
     }
 
-    const totalCost = bulkOrders.reduce((sum, order) => sum + order.price, 0);
+    const totalCost = validOrders.reduce((sum, order) => sum + order.price, 0);
     if (totalCost > userBalance) {
       setError(`Insufficient wallet balance. Need GHS ${totalCost.toFixed(2)}, have GHS ${userBalance.toFixed(2)}`);
       return;
@@ -610,10 +739,10 @@ export default function DataMartMainPage() {
       const token = localStorage.getItem('Token');
       
       // Transform bulk orders to match API format
-      const orders = bulkOrders.map(order => ({
+      const orders = validOrders.map(order => ({
         productId: order.productId,
         beneficiaryNumber: order.beneficiary,
-        quantity: order.quantity || 1
+        quantity: 1
       }));
       
       // Call bulk order endpoint
@@ -639,11 +768,11 @@ export default function DataMartMainPage() {
         }
         
         // Update order statuses
-        setBulkOrders(prev => prev.map((order, index) => {
-          const processed = data.data.processedOrders?.[index];
-          return processed ? 
-            { ...order, status: 'completed' } : 
-            { ...order, status: 'failed' };
+        setBulkOrders(prev => prev.map((order) => {
+          if (order.isValid) {
+            return { ...order, status: 'completed' };
+          }
+          return order;
         }));
         
         setTimeout(() => {
@@ -651,8 +780,13 @@ export default function DataMartMainPage() {
           setBulkFile(null);
           setBulkErrors([]);
           setBulkParseProgress('');
+          setBulkSummary({ total: 0, valid: 0, invalid: 0, totalCost: 0 });
           setSuccess('');
-        }, 3000);
+          // Reset file input
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+        }, 5000);
       } else {
         setError(data.message || 'Bulk processing failed');
         if (data.errors) {
@@ -668,17 +802,62 @@ export default function DataMartMainPage() {
     }
   };
 
+  // Export results to Excel
+  const exportBulkResults = () => {
+    const ws_data = [
+      ['Row #', 'Phone Number', 'Capacity', 'Product', 'Price', 'Status', 'Errors']
+    ];
+    
+    bulkOrders.forEach(order => {
+      ws_data.push([
+        order.row,
+        order.formattedPhone,
+        order.capacity,
+        order.productName,
+        order.price ? `GHS ${order.price.toFixed(2)}` : '-',
+        order.isValid ? 'Valid' : 'Invalid',
+        order.errors ? order.errors.join('; ') : ''
+      ]);
+    });
+    
+    const ws = XLSX.utils.aoa_to_sheet(ws_data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Bulk Orders');
+    XLSX.writeFile(wb, 'bulk_orders_review.xlsx');
+  };
+
+  // Clear bulk orders
+  const clearBulkOrders = () => {
+    setBulkOrders([]);
+    setBulkFile(null);
+    setBulkErrors([]);
+    setBulkParseProgress('');
+    setBulkSummary({ total: 0, valid: 0, invalid: 0, totalCost: 0 });
+    setError('');
+    setSuccess('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const downloadTemplate = () => {
-    const csvContent = "number,capacity\n0244123456,1\n0244789012,2\n0244345678,500";
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'datamart_bulk_template.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const template = [
+      ['number', 'capacity'],
+      ['0244123456', '1'],
+      ['0501234567', '2'],
+      ['0209876543', '5'],
+      ['0277654321', '10'],
+      ['0555555555', '500']
+    ];
+    
+    const ws = XLSX.utils.aoa_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Template');
+    
+    // Add column widths
+    ws['!cols'] = [{ wch: 15 }, { wch: 10 }];
+    
+    XLSX.writeFile(wb, 'datamart_bulk_template.xlsx');
   };
 
   const removeFromCart = (itemId) => {
@@ -742,6 +921,16 @@ export default function DataMartMainPage() {
     }
   };
 
+  // Get filtered bulk orders
+  const getFilteredBulkOrders = () => {
+    if (filterStatus === 'valid') {
+      return bulkOrders.filter(o => o.isValid);
+    } else if (filterStatus === 'invalid') {
+      return bulkOrders.filter(o => !o.isValid);
+    }
+    return bulkOrders;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#2a2d3a] flex items-center justify-center">
@@ -755,7 +944,7 @@ export default function DataMartMainPage() {
 
   return (
     <div className="min-h-screen bg-[#2a2d3a] relative">
-      {/* RESPONSIVE HEADER */}
+      {/* RESPONSIVE HEADER - Same as original */}
       <header className="bg-[#1f2128] border-b border-gray-700 sticky top-0 z-30">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16">
@@ -823,7 +1012,7 @@ export default function DataMartMainPage() {
         </div>
       </header>
 
-      {/* MOBILE MENU DRAWER */}
+      {/* MOBILE MENU DRAWER - Same as original */}
       {showMobileMenu && (
         <div className="lg:hidden fixed inset-0 z-40">
           <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setShowMobileMenu(false)} />
@@ -904,7 +1093,7 @@ export default function DataMartMainPage() {
         </div>
       )}
 
-      {/* RESPONSIVE HERO SECTION */}
+      {/* RESPONSIVE HERO SECTION - Same as original */}
       <section className="bg-gradient-to-r from-yellow-400 to-yellow-600 py-8 sm:py-12 lg:py-16">
         <div className="container mx-auto px-4">
           <div className="text-center">
@@ -989,8 +1178,18 @@ export default function DataMartMainPage() {
           </div>
         )}
 
+        {/* Success Message Display */}
+        {success && !selectedProduct && purchaseMode !== 'bulk' && (
+          <div className="mb-6 p-4 bg-green-500 bg-opacity-10 border border-green-500 rounded-lg">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+              <p className="text-green-500">{success}</p>
+            </div>
+          </div>
+        )}
+
         {purchaseMode === 'bulk' ? (
-          // IMPROVED BULK PURCHASE INTERFACE
+          // ENHANCED BULK PURCHASE INTERFACE
           <div className="bg-gray-800 rounded-xl p-4 sm:p-6 lg:p-8">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl sm:text-2xl font-bold text-white">Bulk Data Purchase</h3>
@@ -1020,6 +1219,25 @@ export default function DataMartMainPage() {
                 Manual Input
               </button>
             </div>
+            
+            {/* Error/Success Messages for Bulk */}
+            {error && purchaseMode === 'bulk' && (
+              <div className="mb-4 p-4 bg-red-500 bg-opacity-10 border border-red-500 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                  <p className="text-red-500">{error}</p>
+                </div>
+              </div>
+            )}
+            
+            {success && purchaseMode === 'bulk' && (
+              <div className="mb-4 p-4 bg-green-500 bg-opacity-10 border border-green-500 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                  <p className="text-green-500">{success}</p>
+                </div>
+              </div>
+            )}
             
             <div className="grid md:grid-cols-2 gap-6 lg:gap-8">
               {/* Upload Section or Manual Input */}
@@ -1072,7 +1290,8 @@ export default function DataMartMainPage() {
                           Supports .xlsx, .xls, .csv formats
                         </p>
                         {bulkParseProgress && (
-                          <p className="text-green-400 text-sm mt-2">
+                          <p className="text-green-400 text-sm mt-2 flex items-center justify-center gap-2">
+                            <Loader2 className="w-4 h-4 animate-spin" />
                             {bulkParseProgress}
                           </p>
                         )}
@@ -1143,139 +1362,297 @@ export default function DataMartMainPage() {
               </div>
             </div>
             
-            {/* Bulk Orders Preview with Better UI */}
+            {/* ENHANCED BULK ORDERS PREVIEW */}
             {bulkOrders.length > 0 && (
               <div className="mt-6 sm:mt-8">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-base sm:text-lg font-medium text-white">
-                    Orders Preview
-                  </h4>
+                {/* Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <Hash className="w-5 h-5 text-yellow-400" />
+                      <span className="text-2xl font-bold text-white">{bulkSummary.total}</span>
+                    </div>
+                    <p className="text-gray-400 text-sm mt-2">Total Rows</p>
+                  </div>
+                  
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <CheckCircle className="w-5 h-5 text-green-400" />
+                      <span className="text-2xl font-bold text-green-400">{bulkSummary.valid}</span>
+                    </div>
+                    <p className="text-gray-400 text-sm mt-2">Valid Orders</p>
+                  </div>
+                  
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <XCircle className="w-5 h-5 text-red-400" />
+                      <span className="text-2xl font-bold text-red-400">{bulkSummary.invalid}</span>
+                    </div>
+                    <p className="text-gray-400 text-sm mt-2">Invalid Orders</p>
+                  </div>
+                  
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <DollarSign className="w-5 h-5 text-yellow-400" />
+                      <span className="text-2xl font-bold text-yellow-400">₵{bulkSummary.totalCost.toFixed(2)}</span>
+                    </div>
+                    <p className="text-gray-400 text-sm mt-2">Total Cost</p>
+                  </div>
+                </div>
+                
+                {/* Filter and Actions Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                   <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 bg-green-500 bg-opacity-20 text-green-400 rounded-full text-sm font-medium">
-                      {bulkOrders.filter(o => o.status === 'completed').length} Complete
-                    </span>
-                    <span className="px-3 py-1 bg-yellow-500 bg-opacity-20 text-yellow-400 rounded-full text-sm font-medium">
-                      {bulkOrders.filter(o => o.status === 'pending').length} Pending
-                    </span>
-                    <span className="px-3 py-1 bg-gray-600 text-gray-300 rounded-full text-sm font-medium">
-                      {bulkOrders.length} Total
-                    </span>
+                    <select
+                      value={filterStatus}
+                      onChange={(e) => setFilterStatus(e.target.value)}
+                      className="px-3 py-2 bg-gray-700 text-white rounded-lg focus:outline-none"
+                    >
+                      <option value="all">All Orders ({bulkOrders.length})</option>
+                      <option value="valid">Valid Only ({bulkSummary.valid})</option>
+                      <option value="invalid">Invalid Only ({bulkSummary.invalid})</option>
+                    </select>
+                    
+                    <button
+                      onClick={() => setShowPreview(!showPreview)}
+                      className="px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center gap-2"
+                    >
+                      {showPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showPreview ? 'Hide' : 'Show'} Preview
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={exportBulkResults}
+                      className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                    >
+                      <Download className="w-4 h-4" />
+                      Export
+                    </button>
+                    <button
+                      onClick={clearBulkOrders}
+                      className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors flex items-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Clear
+                    </button>
                   </div>
                 </div>
                 
-                {/* Desktop Table */}
-                <div className="hidden sm:block overflow-x-auto">
-                  <div className="bg-gray-700 rounded-lg overflow-hidden">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-gray-600">
-                        <tr>
-                          <th className="px-4 py-3 text-gray-300">#</th>
-                          <th className="px-4 py-3 text-gray-300">Product</th>
-                          <th className="px-4 py-3 text-gray-300">Capacity</th>
-                          <th className="px-4 py-3 text-gray-300">Beneficiary</th>
-                          <th className="px-4 py-3 text-gray-300">Price</th>
-                          <th className="px-4 py-3 text-gray-300">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-600">
-                        {bulkOrders.slice(0, 10).map((order) => (
-                          <tr key={order.row} className="hover:bg-gray-600 transition-colors">
-                            <td className="px-4 py-3 text-white">{order.row}</td>
-                            <td className="px-4 py-3 text-white">{order.productName}</td>
-                            <td className="px-4 py-3 text-white">{order.capacity}</td>
-                            <td className="px-4 py-3 text-white font-mono text-xs">{order.beneficiary}</td>
-                            <td className="px-4 py-3 text-yellow-400">₵{order.price.toFixed(2)}</td>
-                            <td className="px-4 py-3">
-                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${
-                                order.status === 'completed' 
-                                  ? 'bg-green-500 bg-opacity-20 text-green-400'
-                                  : order.status === 'failed'
-                                  ? 'bg-red-500 bg-opacity-20 text-red-400'
-                                  : 'bg-yellow-500 bg-opacity-20 text-yellow-400'
-                              }`}>
-                                {order.status === 'completed' && <CheckCircle className="w-3 h-3" />}
-                                {order.status === 'failed' && <XCircle className="w-3 h-3" />}
-                                {order.status === 'pending' && <AlertCircle className="w-3 h-3" />}
-                                {order.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {bulkOrders.length > 10 && (
-                      <div className="px-4 py-3 bg-gray-600 text-center">
-                        <p className="text-gray-400 text-sm">
-                          Showing 10 of {bulkOrders.length} orders
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Mobile Cards */}
-                <div className="sm:hidden space-y-3">
-                  {bulkOrders.slice(0, 5).map((order) => (
-                    <div key={order.row} className="bg-gray-700 rounded-lg p-4">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <span className="text-white font-medium">{order.capacity}</span>
-                          <p className="text-gray-400 text-xs mt-1">{order.productName}</p>
-                        </div>
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${
-                          order.status === 'completed' 
-                            ? 'bg-green-500 bg-opacity-20 text-green-400'
-                            : 'bg-yellow-500 bg-opacity-20 text-yellow-400'
-                        }`}>
-                          {order.status === 'completed' && <CheckCircle className="w-3 h-3" />}
-                          {order.status === 'pending' && <AlertCircle className="w-3 h-3" />}
-                          {order.status}
-                        </span>
-                      </div>
-                      <div className="space-y-1 text-sm">
-                        <p className="text-gray-300">
-                          <Phone className="inline w-3 h-3 mr-1 text-gray-500" />
-                          {order.beneficiary}
-                        </p>
-                        <p className="text-yellow-400 font-medium">₵{order.price.toFixed(2)}</p>
+                {/* Desktop Table - Shows ALL rows with scrolling */}
+                {showPreview && (
+                  <div className="hidden sm:block">
+                    <div className="bg-gray-700 rounded-lg overflow-hidden">
+                      <div className="max-h-96 overflow-y-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead className="bg-gray-600 sticky top-0 z-10">
+                            <tr>
+                              <th className="px-4 py-3 text-gray-300">Row #</th>
+                              <th className="px-4 py-3 text-gray-300">Phone Number</th>
+                              <th className="px-4 py-3 text-gray-300">Capacity</th>
+                              <th className="px-4 py-3 text-gray-300">Product</th>
+                              <th className="px-4 py-3 text-gray-300">Price</th>
+                              <th className="px-4 py-3 text-gray-300">Status</th>
+                              <th className="px-4 py-3 text-gray-300">Issues</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-600">
+                            {getFilteredBulkOrders().map((order) => (
+                              <tr key={`${order.row}-${order.formattedPhone}`} 
+                                  className={`hover:bg-gray-600 transition-colors ${
+                                    !order.isValid ? 'bg-red-900 bg-opacity-20' : ''
+                                  } ${order.status === 'completed' ? 'bg-green-900 bg-opacity-10' : ''}`}>
+                                <td className="px-4 py-3 text-white">{order.row}</td>
+                                <td className="px-4 py-3">
+                                  <div>
+                                    <p className={order.isValid ? 'text-white' : 'text-red-400'}>
+                                      {order.formattedPhone}
+                                    </p>
+                                    {order.originalPhone !== order.formattedPhone && (
+                                      <p className="text-xs text-gray-400">Original: {order.originalPhone}</p>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div>
+                                    <p className={order.isValid ? 'text-white' : 'text-red-400'}>
+                                      {order.capacity}
+                                    </p>
+                                    {order.originalCapacity && order.originalCapacity !== order.capacity && (
+                                      <p className="text-xs text-gray-400">Input: {order.originalCapacity}</p>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-white">{order.productName}</td>
+                                <td className="px-4 py-3">
+                                  {order.price > 0 ? (
+                                    <span className="text-yellow-400 font-medium">₵{order.price.toFixed(2)}</span>
+                                  ) : (
+                                    <span className="text-gray-500">-</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3">
+                                  {order.status === 'completed' ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-green-500 bg-opacity-20 text-green-400">
+                                      <CheckCircle className="w-3 h-3" />
+                                      Completed
+                                    </span>
+                                  ) : order.status === 'failed' ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-red-500 bg-opacity-20 text-red-400">
+                                      <XCircle className="w-3 h-3" />
+                                      Failed
+                                    </span>
+                                  ) : order.isValid ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-yellow-500 bg-opacity-20 text-yellow-400">
+                                      <AlertCircle className="w-3 h-3" />
+                                      Pending
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-red-500 bg-opacity-20 text-red-400">
+                                      <XCircle className="w-3 h-3" />
+                                      Invalid
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3">
+                                  {order.errors && order.errors.length > 0 ? (
+                                    <ul className="text-xs text-red-300">
+                                      {order.errors.map((err, idx) => (
+                                        <li key={idx}>• {err}</li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <span className="text-xs text-green-400">✓ Ready</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                  ))}
-                  {bulkOrders.length > 5 && (
-                    <p className="text-gray-400 text-sm text-center py-2">
-                      +{bulkOrders.length - 5} more orders...
-                    </p>
-                  )}
-                </div>
+                    
+                    <div className="mt-2 text-center text-sm text-gray-400">
+                      Showing {getFilteredBulkOrders().length} of {bulkOrders.length} orders
+                      {bulkSummary.invalid > 0 && (
+                        <span className="text-orange-400 ml-2">
+                          ({bulkSummary.invalid} invalid rows need correction)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Mobile Cards - Shows ALL with scrolling */}
+                {showPreview && (
+                  <div className="sm:hidden">
+                    <div className="max-h-96 overflow-y-auto space-y-3">
+                      {getFilteredBulkOrders().map((order) => (
+                        <div key={`${order.row}-${order.formattedPhone}`} 
+                             className={`bg-gray-700 rounded-lg p-4 ${
+                               !order.isValid ? 'border-2 border-red-500' : ''
+                             } ${order.status === 'completed' ? 'border-2 border-green-500' : ''}`}>
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <span className="text-gray-400 text-xs">Row {order.row}</span>
+                              <p className="text-white font-medium">{order.capacity}</p>
+                              <p className="text-gray-400 text-xs mt-1">{order.productName}</p>
+                            </div>
+                            {order.status === 'completed' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-green-500 bg-opacity-20 text-green-400">
+                                <CheckCircle className="w-3 h-3" />
+                                Completed
+                              </span>
+                            ) : order.isValid ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-yellow-500 bg-opacity-20 text-yellow-400">
+                                <AlertCircle className="w-3 h-3" />
+                                Pending
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-red-500 bg-opacity-20 text-red-400">
+                                <XCircle className="w-3 h-3" />
+                                Invalid
+                              </span>
+                            )}
+                          </div>
+                          <div className="space-y-1 text-sm">
+                            <p className={order.isValid ? 'text-gray-300' : 'text-red-400'}>
+                              <Phone className="inline w-3 h-3 mr-1 text-gray-500" />
+                              {order.formattedPhone || order.originalPhone}
+                            </p>
+                            <p className="text-yellow-400 font-medium">
+                              {order.price > 0 ? `₵${order.price.toFixed(2)}` : 'No price'}
+                            </p>
+                            {order.errors && order.errors.length > 0 && (
+                              <div className="mt-2 text-xs text-red-300">
+                                {order.errors.map((err, idx) => (
+                                  <p key={idx}>• {err}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 text-center text-sm text-gray-400">
+                      Showing {getFilteredBulkOrders().length} orders
+                    </div>
+                  </div>
+                )}
                 
                 {/* Process Section */}
                 <div className="mt-6 p-4 bg-gray-700 rounded-lg">
                   <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                     <div>
-                      <p className="text-sm text-gray-400">Total Amount</p>
+                      <p className="text-sm text-gray-400">
+                        {bulkSummary.valid} valid orders ready to process
+                      </p>
                       <p className="text-2xl font-bold text-yellow-400">
-                        ₵{bulkOrders.reduce((sum, order) => sum + order.price, 0).toFixed(2)}
+                        Total: ₵{bulkSummary.totalCost.toFixed(2)}
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
-                        Balance: ₵{userBalance.toFixed(2)}
+                        Wallet Balance: ₵{userBalance.toFixed(2)}
+                        {bulkSummary.totalCost > userBalance && (
+                          <span className="text-red-400 ml-2">
+                            (Insufficient balance)
+                          </span>
+                        )}
                       </p>
                     </div>
                     
                     <button
                       onClick={processBulkOrders}
-                      disabled={processingBulk || bulkOrders.reduce((sum, order) => sum + order.price, 0) > userBalance}
+                      disabled={processingBulk || bulkSummary.valid === 0 || bulkSummary.totalCost > userBalance}
                       className="w-full sm:w-auto px-8 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
                       {processingBulk && <Loader2 className="w-5 h-5 animate-spin" />}
-                      {processingBulk ? 'Processing...' : `Process ${bulkOrders.length} Orders`}
+                      {processingBulk ? 'Processing...' : `Process ${bulkSummary.valid} Valid Orders`}
                     </button>
                   </div>
+                  
+                  {/* Show any bulk processing errors */}
+                  {bulkErrors.length > 0 && (
+                    <div className="mt-4 p-3 bg-red-500 bg-opacity-10 border border-red-500 rounded-lg">
+                      <p className="text-red-400 text-sm font-medium mb-2">Processing Errors:</p>
+                      <ul className="text-xs text-red-300 space-y-1">
+                        {bulkErrors.slice(0, 5).map((err, idx) => (
+                          <li key={idx}>• {err}</li>
+                        ))}
+                      </ul>
+                      {bulkErrors.length > 5 && (
+                        <p className="text-red-300 text-xs mt-2">
+                          ...and {bulkErrors.length - 5} more errors
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
           </div>
         ) : selectedProduct ? (
-          // COMPACT SELECTED PRODUCT VIEW
+          // COMPACT SELECTED PRODUCT VIEW - Same as original
           <div className="bg-[#1f2128] rounded-xl p-4 sm:p-6 shadow-2xl animate-fadeIn max-w-md mx-auto">
             <button
               onClick={() => setSelectedProduct(null)}
@@ -1415,7 +1792,7 @@ export default function DataMartMainPage() {
         )}
       </main>
 
-      {/* RESPONSIVE STATS SECTION */}
+      {/* RESPONSIVE STATS SECTION - Same as original */}
       <section className="bg-gray-800 py-8 sm:py-12">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -1439,7 +1816,7 @@ export default function DataMartMainPage() {
         </div>
       </section>
 
-      {/* FOOTER */}
+      {/* FOOTER - Same as original */}
       <footer className="bg-[#1f2128] py-8 border-t border-gray-700">
         <div className="container mx-auto px-4">
           <div className="text-center">
@@ -1449,63 +1826,7 @@ export default function DataMartMainPage() {
         </div>
       </footer>
 
-      {/* Bulk Purchase Modal */}
-      {showBulkModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div onClick={() => setShowBulkModal(false)} className="absolute inset-0 bg-black bg-opacity-75" />
-          <div className="relative bg-gray-800 rounded-2xl p-6 max-w-md w-full animate-fadeIn shadow-2xl">
-            <div className="flex flex-col items-center">
-              {bulkModalType === 'success' ? (
-                <>
-                  <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mb-4 animate-pulse">
-                    <CheckCircle className="w-10 h-10 text-white" />
-                  </div>
-                  <h3 className="text-xl font-bold text-white mb-2">Success!</h3>
-                  <p className="text-gray-300 text-center mb-4">{bulkModalMessage}</p>
-                </>
-              ) : (
-                <>
-                  <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center mb-4 animate-pulse">
-                    <XCircle className="w-10 h-10 text-white" />
-                  </div>
-                  <h3 className="text-xl font-bold text-white mb-2">Error Detected</h3>
-                  <p className="text-gray-300 text-center mb-4">{bulkModalMessage}</p>
-                  
-                  {bulkErrors.length > 0 && (
-                    <div className="w-full max-h-40 overflow-y-auto bg-gray-700 rounded-lg p-3 mb-4">
-                      <ul className="space-y-1">
-                        {bulkErrors.slice(0, 10).map((err, idx) => (
-                          <li key={idx} className="text-red-400 text-sm flex items-start gap-1">
-                            <span className="text-red-500">•</span>
-                            <span>{err}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      {bulkErrors.length > 10 && (
-                        <p className="text-gray-400 text-xs mt-2">...and {bulkErrors.length - 10} more errors</p>
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-              
-              <button
-                onClick={() => {
-                  setShowBulkModal(false);
-                  if (bulkModalType === 'error') {
-                    setBulkErrors([]);
-                  }
-                }}
-                className="px-6 py-2 bg-yellow-400 text-gray-900 font-medium rounded-lg hover:bg-yellow-500 transition-colors"
-              >
-                {bulkModalType === 'success' ? 'Continue' : 'Try Again'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* CART SIDEBAR */}
+      {/* CART SIDEBAR - Same as original */}
       {showCart && (
         <CartSidebar 
           cart={cart} 
@@ -1517,7 +1838,7 @@ export default function DataMartMainPage() {
         />
       )}
       
-      {/* ACCOUNT DROPDOWN - More Compact */}
+      {/* ACCOUNT DROPDOWN - Same as original */}
       {showAccountMenu && (
         <div className="absolute top-16 right-4 w-48 bg-gray-800 rounded-lg shadow-lg py-1 z-50">
           {userData && (
@@ -1561,7 +1882,7 @@ export default function DataMartMainPage() {
   );
 }
 
-// RESPONSIVE PRODUCT CARD COMPONENT
+// RESPONSIVE PRODUCT CARD COMPONENT - Same as original
 function ProductCard({ product, onSelect }) {
   return (
     <div
@@ -1601,7 +1922,7 @@ function ProductCard({ product, onSelect }) {
   );
 }
 
-// RESPONSIVE CART SIDEBAR COMPONENT
+// RESPONSIVE CART SIDEBAR COMPONENT - Same as original
 function CartSidebar({ cart, onClose, onRemoveItem, totalAmount, onCheckout, userBalance }) {
   const [processing, setProcessing] = useState(false);
   
