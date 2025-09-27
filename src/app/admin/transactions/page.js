@@ -10,7 +10,6 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   ClockIcon,
-  FunnelIcon,
   ArrowDownTrayIcon,
   PencilSquareIcon,
   ExclamationTriangleIcon,
@@ -34,6 +33,11 @@ export default function TransactionsPage() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [selectedTransactions, setSelectedTransactions] = useState([]);
   const [exportPreview, setExportPreview] = useState(null);
+  const [exportInProgress, setExportInProgress] = useState(false);
+  const [notification, setNotification] = useState(null);
+  const [statusUpdateReason, setStatusUpdateReason] = useState('');
+  const [bulkStatusUpdate, setBulkStatusUpdate] = useState({ status: '', reason: '' });
+  const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
   const [exportSettings, setExportSettings] = useState({
     status: 'pending',
     markAsSuccessful: true
@@ -70,6 +74,11 @@ export default function TransactionsPage() {
       }
     } catch (error) {
       console.error('Error fetching transactions:', error);
+      setNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to fetch transactions'
+      });
     } finally {
       setLoading(false);
     }
@@ -89,32 +98,49 @@ export default function TransactionsPage() {
 
       const data = await response.json();
       if (data.success) {
-        alert(`Transaction status updated to ${newStatus}`);
+        setNotification({
+          type: 'success',
+          title: 'Status Updated',
+          message: `Transaction updated to ${newStatus}`
+        });
         fetchTransactions();
         setShowStatusModal(false);
+        setStatusUpdateReason('');
       } else {
-        alert(data.message || 'Error updating status');
+        setNotification({
+          type: 'error',
+          title: 'Update Failed',
+          message: data.message || 'Error updating status'
+        });
       }
     } catch (error) {
       console.error('Error updating status:', error);
-      alert('Error updating transaction status');
+      setNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to update transaction status'
+      });
     }
   };
 
   const handleBulkStatusUpdate = async () => {
     if (selectedTransactions.length === 0) {
-      alert('Please select transactions to update');
+      setNotification({
+        type: 'error',
+        title: 'No Selection',
+        message: 'Please select transactions to update'
+      });
       return;
     }
 
-    const status = prompt('Enter new status (pending, successful, failed):');
-    if (!['pending', 'successful', 'failed'].includes(status)) {
-      alert('Invalid status');
+    if (!bulkStatusUpdate.status || !bulkStatusUpdate.reason) {
+      setNotification({
+        type: 'error',
+        title: 'Missing Information',
+        message: 'Please provide status and reason'
+      });
       return;
     }
-
-    const reason = prompt('Reason for bulk update:');
-    if (!reason) return;
 
     try {
       const token = localStorage.getItem('Token');
@@ -126,19 +152,36 @@ export default function TransactionsPage() {
         },
         body: JSON.stringify({ 
           transactionIds: selectedTransactions, 
-          status, 
-          reason 
+          status: bulkStatusUpdate.status, 
+          reason: bulkStatusUpdate.reason 
         })
       });
 
       const data = await response.json();
       if (data.success) {
-        alert(`Updated ${data.results.successfullyUpdated} transactions`);
+        setNotification({
+          type: 'success',
+          title: 'Bulk Update Successful',
+          message: `Updated ${data.results.successfullyUpdated} transactions`
+        });
         setSelectedTransactions([]);
+        setShowBulkStatusModal(false);
+        setBulkStatusUpdate({ status: '', reason: '' });
         fetchTransactions();
+      } else {
+        setNotification({
+          type: 'error',
+          title: 'Bulk Update Failed',
+          message: data.message || 'Error updating transactions'
+        });
       }
     } catch (error) {
       console.error('Error in bulk update:', error);
+      setNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to perform bulk update'
+      });
     }
   };
 
@@ -164,31 +207,34 @@ export default function TransactionsPage() {
         setExportPreview(data);
         setShowExportModal(true);
       } else {
-        alert(data.message || 'Error previewing batch');
+        setNotification({
+          type: 'error',
+          title: 'Preview Failed',
+          message: data.message || 'Error previewing batch'
+        });
       }
     } catch (error) {
       console.error('Error previewing batch:', error);
-      alert('Error previewing batch export');
+      setNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to preview batch export'
+      });
     }
   };
 
-  const handleExportExcel = async (skipConfirmation = false) => {
+  const handleExportExcel = async () => {
     try {
+      setExportInProgress(true);
       const token = localStorage.getItem('Token');
       
-      if (exportSettings.status === 'pending' && exportSettings.markAsSuccessful && !skipConfirmation) {
-        const confirmed = window.confirm(
-          'WARNING: You are about to create a batch export of pending orders and mark them as successful. ' +
-          'This will deduct amounts from user wallets and cannot be undone. ' +
-          'Are you sure you want to proceed?'
-        );
-        
-        if (!confirmed) return;
-        
-        // Proceed with export without asking again
-        handleExportExcel(true);
-        return;
-      }
+      const requestBody = {
+        status: exportSettings.status,
+        markAsSuccessful: exportSettings.markAsSuccessful,
+        confirmExport: true,
+        ...(startDate && { startDate }),
+        ...(endDate && { endDate })
+      };
 
       const response = await fetch('https://server-datamart-reseller.onrender.com/api/admin/orders/export/excel', {
         method: 'POST',
@@ -196,33 +242,44 @@ export default function TransactionsPage() {
           'x-auth-token': token,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          status: exportSettings.status,
-          markAsSuccessful: exportSettings.markAsSuccessful,
-          ...(startDate && { startDate }),
-          ...(endDate && { endDate })
-        })
+        body: JSON.stringify(requestBody)
       });
 
       const contentType = response.headers.get('content-type');
-      const batchId = response.headers.get('X-Batch-ID');
       
-      if (!response.ok || (contentType && contentType.includes('application/json'))) {
+      if (!response.ok) {
+        const errorData = await response.json();
+        setExportInProgress(false);
+        setNotification({
+          type: 'error',
+          title: 'Export Failed',
+          message: errorData.message || 'Error exporting batch'
+        });
+        setShowExportModal(false);
+        return;
+      }
+
+      if (contentType && contentType.includes('application/json')) {
         const data = await response.json();
-        if (data.requiresConfirmation) {
-          alert(data.message);
-          return;
-        }
+        setExportInProgress(false);
         if (!data.success) {
-          alert(data.message || 'Error exporting batch');
+          setNotification({
+            type: 'error',
+            title: 'Export Failed',
+            message: data.message || 'Error exporting batch'
+          });
+          setShowExportModal(false);
           return;
         }
       } else {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
+        
+        const batchId = response.headers.get('X-Batch-ID') || 'export';
+        
         a.href = url;
-        a.download = `batch_${batchId || 'export'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        a.download = `batch_${batchId}_${new Date().toISOString().split('T')[0]}.xlsx`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -236,16 +293,13 @@ export default function TransactionsPage() {
           markAsSuccessful: true
         });
         setShowExportModal(false);
+        setExportInProgress(false);
         
-        if (summary && summary.batchId) {
-          alert(`Batch ${summary.batchId} created successfully!\n` +
-                `Exported: ${summary.exported} orders\n` +
-                `Processed: ${summary.processed} orders\n` +
-                `Failed: ${summary.failed} orders\n\n` +
-                `View batch details in the Batches section.`);
-        } else {
-          alert('Batch exported successfully!');
-        }
+        setNotification({
+          type: 'success',
+          title: `Batch ${summary?.batchId || batchId} Exported!`,
+          message: summary ? `Exported: ${summary.exported} | Processed: ${summary.processed}` : 'Export completed'
+        });
         
         if (exportSettings.markAsSuccessful) {
           fetchTransactions();
@@ -253,14 +307,17 @@ export default function TransactionsPage() {
       }
     } catch (error) {
       console.error('Error exporting batch:', error);
-      alert('Error creating batch export: ' + error.message);
+      setExportInProgress(false);
+      setShowExportModal(false);
+      setNotification({
+        type: 'error',
+        title: 'Export Error',
+        message: error.message
+      });
     }
   };
 
   const handleReverse = async (transactionId) => {
-    const reason = prompt('Please provide a reason for reversing this transaction:');
-    if (!reason) return;
-
     try {
       const token = localStorage.getItem('Token');
       const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/transactions/${transactionId}/reverse`, {
@@ -269,24 +326,35 @@ export default function TransactionsPage() {
           'x-auth-token': token,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ reason })
+        body: JSON.stringify({ reason: 'Admin reversal' })
       });
 
       const data = await response.json();
       if (data.success) {
-        alert('Transaction reversed successfully');
+        setNotification({
+          type: 'success',
+          title: 'Transaction Reversed',
+          message: 'Transaction has been reversed successfully'
+        });
         fetchTransactions();
       } else {
-        alert(data.message || 'Error reversing transaction');
+        setNotification({
+          type: 'error',
+          title: 'Reversal Failed',
+          message: data.message || 'Error reversing transaction'
+        });
       }
     } catch (error) {
       console.error('Error reversing transaction:', error);
+      setNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to reverse transaction'
+      });
     }
   };
 
   const handleRetry = async (transactionId) => {
-    if (!confirm('Are you sure you want to retry this transaction?')) return;
-
     try {
       const token = localStorage.getItem('Token');
       const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/transactions/${transactionId}/retry`, {
@@ -298,13 +366,26 @@ export default function TransactionsPage() {
 
       const data = await response.json();
       if (data.success) {
-        alert('Transaction retry initiated');
+        setNotification({
+          type: 'success',
+          title: 'Retry Initiated',
+          message: 'Transaction retry has been initiated'
+        });
         fetchTransactions();
       } else {
-        alert(data.message || 'Error retrying transaction');
+        setNotification({
+          type: 'error',
+          title: 'Retry Failed',
+          message: data.message || 'Error retrying transaction'
+        });
       }
     } catch (error) {
       console.error('Error retrying transaction:', error);
+      setNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to retry transaction'
+      });
     }
   };
 
@@ -322,6 +403,11 @@ export default function TransactionsPage() {
       }
     } catch (error) {
       console.error('Error fetching transaction details:', error);
+      setNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to fetch transaction details'
+      });
     }
   };
 
@@ -347,9 +433,19 @@ export default function TransactionsPage() {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
+      
+      setNotification({
+        type: 'success',
+        title: 'CSV Exported',
+        message: 'Transaction data exported successfully'
+      });
     } catch (error) {
       console.error('Error exporting CSV:', error);
-      alert('Error exporting CSV: ' + error.message);
+      setNotification({
+        type: 'error',
+        title: 'Export Failed',
+        message: 'Failed to export CSV'
+      });
     }
   };
 
@@ -410,8 +506,142 @@ export default function TransactionsPage() {
     }
   };
 
+  // Notification Toast Component
+  const NotificationToast = () => {
+    useEffect(() => {
+      if (notification) {
+        const timer = setTimeout(() => {
+          setNotification(null);
+        }, 3000); // 3 seconds
+        return () => clearTimeout(timer);
+      }
+    }, [notification]);
+
+    if (!notification) return null;
+
+    return (
+      <div className="fixed top-4 right-4 z-[70] animate-slideIn">
+        <div className={`rounded-lg shadow-lg p-4 max-w-md ${
+          notification.type === 'success' 
+            ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700'
+            : 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700'
+        }`}>
+          <div className="flex items-start">
+            {notification.type === 'success' ? (
+              <CheckCircleIcon className="h-5 w-5 text-green-400 dark:text-green-300 mt-0.5" />
+            ) : (
+              <XCircleIcon className="h-5 w-5 text-red-400 dark:text-red-300 mt-0.5" />
+            )}
+            <div className="ml-3 flex-1">
+              <h3 className={`text-sm font-medium ${
+                notification.type === 'success'
+                  ? 'text-green-800 dark:text-green-200'
+                  : 'text-red-800 dark:text-red-200'
+              }`}>
+                {notification.title}
+              </h3>
+              {notification.message && (
+                <div className={`mt-1 text-sm ${
+                  notification.type === 'success'
+                    ? 'text-green-700 dark:text-green-300'
+                    : 'text-red-700 dark:text-red-300'
+                }`}>
+                  {notification.message}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setNotification(null)}
+              className="ml-4 text-gray-400 hover:text-gray-500 dark:text-gray-500 dark:hover:text-gray-400"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Bulk Status Update Modal
+  const BulkStatusUpdateModal = () => (
+    <>
+      {showBulkStatusModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">
+              Bulk Status Update
+            </h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Selected Transactions
+                </label>
+                <p className="text-sm text-gray-900 dark:text-gray-100">
+                  {selectedTransactions.length} transactions selected
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  New Status
+                </label>
+                <select
+                  value={bulkStatusUpdate.status}
+                  onChange={(e) => setBulkStatusUpdate({...bulkStatusUpdate, status: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                >
+                  <option value="">Select status</option>
+                  <option value="pending">Pending</option>
+                  <option value="successful">Successful</option>
+                  <option value="failed">Failed</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Reason for Update
+                </label>
+                <textarea
+                  value={bulkStatusUpdate.reason}
+                  onChange={(e) => setBulkStatusUpdate({...bulkStatusUpdate, reason: e.target.value})}
+                  rows="3"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                  placeholder="Enter reason for bulk update..."
+                />
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowBulkStatusModal(false);
+                  setBulkStatusUpdate({ status: '', reason: '' });
+                }}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkStatusUpdate}
+                className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+              >
+                Update Status
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div className="space-y-6">
+      {/* Notification Toast */}
+      <NotificationToast />
+
       {/* Page Header */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
         <div className="flex justify-between items-center">
@@ -422,11 +652,11 @@ export default function TransactionsPage() {
           <div className="flex space-x-2">
             {selectedTransactions.length > 0 && (
               <button
-                onClick={handleBulkStatusUpdate}
+                onClick={() => setShowBulkStatusModal(true)}
                 className="flex items-center px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 dark:bg-yellow-500 dark:hover:bg-yellow-600"
               >
                 <PencilSquareIcon className="h-5 w-5 mr-2" />
-                Update Status ({selectedTransactions.length})
+                Update ({selectedTransactions.length})
               </button>
             )}
             <button
@@ -434,21 +664,21 @@ export default function TransactionsPage() {
               className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
             >
               <FolderIcon className="h-5 w-5 mr-2" />
-              View Batches
+              Batches
             </button>
             <button
               onClick={handleExportPreview}
               className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
             >
               <DocumentArrowDownIcon className="h-5 w-5 mr-2" />
-              Export Batch
+              Export
             </button>
             <button
               onClick={handleExportCSV}
               className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
             >
               <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
-              Export CSV
+              CSV
             </button>
           </div>
         </div>
@@ -460,7 +690,7 @@ export default function TransactionsPage() {
           <div className="lg:col-span-2 relative">
             <input
               type="text"
-              placeholder="Search by ID, user, phone..."
+              placeholder="Search..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
@@ -497,7 +727,6 @@ export default function TransactionsPage() {
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-            placeholder="Start Date"
           />
 
           <input
@@ -505,7 +734,6 @@ export default function TransactionsPage() {
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
             className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-            placeholder="End Date"
           />
         </div>
       </div>
@@ -525,7 +753,7 @@ export default function TransactionsPage() {
                   />
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Transaction ID
+                  ID
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   User
@@ -607,7 +835,7 @@ export default function TransactionsPage() {
                         <button
                           onClick={() => viewDetails(transaction._id)}
                           className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                          title="View Details"
+                          title="View"
                         >
                           <EyeIcon className="h-5 w-5" />
                         </button>
@@ -617,7 +845,7 @@ export default function TransactionsPage() {
                             setShowStatusModal(true);
                           }}
                           className="text-yellow-600 hover:text-yellow-900 dark:text-yellow-400 dark:hover:text-yellow-300"
-                          title="Update Status"
+                          title="Edit"
                         >
                           <PencilSquareIcon className="h-5 w-5" />
                         </button>
@@ -625,7 +853,7 @@ export default function TransactionsPage() {
                           <button
                             onClick={() => handleReverse(transaction._id)}
                             className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                            title="Reverse Transaction"
+                            title="Reverse"
                           >
                             <ArrowUturnLeftIcon className="h-5 w-5" />
                           </button>
@@ -634,7 +862,7 @@ export default function TransactionsPage() {
                           <button
                             onClick={() => handleRetry(transaction._id)}
                             className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
-                            title="Retry Transaction"
+                            title="Retry"
                           >
                             <ArrowPathIcon className="h-5 w-5" />
                           </button>
@@ -673,6 +901,11 @@ export default function TransactionsPage() {
           </div>
         )}
       </div>
+
+      {/* Modals */}
+      
+      {/* Bulk Status Update Modal */}
+      <BulkStatusUpdateModal />
 
       {/* Status Update Modal */}
       {showStatusModal && selectedTransaction && (
@@ -716,15 +949,20 @@ export default function TransactionsPage() {
                 <textarea
                   id="statusReason"
                   rows="3"
+                  value={statusUpdateReason}
+                  onChange={(e) => setStatusUpdateReason(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                  placeholder="Enter reason for status change..."
-                ></textarea>
+                  placeholder="Enter reason..."
+                />
               </div>
             </div>
             
             <div className="mt-6 flex justify-end space-x-3">
               <button
-                onClick={() => setShowStatusModal(false)}
+                onClick={() => {
+                  setShowStatusModal(false);
+                  setStatusUpdateReason('');
+                }}
                 className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Cancel
@@ -732,12 +970,11 @@ export default function TransactionsPage() {
               <button
                 onClick={() => {
                   const newStatus = document.getElementById('newStatus').value;
-                  const reason = document.getElementById('statusReason').value;
-                  handleStatusUpdate(selectedTransaction._id, newStatus, reason);
+                  handleStatusUpdate(selectedTransaction._id, newStatus, statusUpdateReason);
                 }}
                 className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
               >
-                Update Status
+                Update
               </button>
             </div>
           </div>
@@ -749,171 +986,128 @@ export default function TransactionsPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-4xl max-h-[80vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">
-              Create Order Batch Export
+              Export Batch
             </h2>
             
-            {/* Batch Info Alert */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded p-4 mb-4">
-              <div className="flex">
-                <DocumentArrowDownIcon className="h-6 w-6 text-blue-600 dark:text-blue-400 mr-2" />
+            {/* Export Settings */}
+            <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded mb-4">
+              <h3 className="font-semibold mb-3 text-gray-900 dark:text-white">Settings</h3>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h4 className="font-semibold text-blue-900 dark:text-blue-300">Batch Export Information</h4>
-                  <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
-                    This export will create a new batch with a unique Batch ID. Maximum 40 orders per batch.
-                  </p>
-                  <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
-                    You can view, search, and re-export this batch anytime from the Batches section.
-                  </p>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Order Status
+                  </label>
+                  <select
+                    value={exportSettings.status}
+                    onChange={(e) => setExportSettings({
+                      ...exportSettings,
+                      status: e.target.value,
+                      markAsSuccessful: e.target.value === 'pending'
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="successful">Successful</option>
+                    <option value="failed">Failed</option>
+                  </select>
                 </div>
+                
+                {exportSettings.status === 'pending' && (
+                  <div className="flex items-center">
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={exportSettings.markAsSuccessful}
+                        onChange={(e) => setExportSettings({
+                          ...exportSettings,
+                          markAsSuccessful: e.target.checked
+                        })}
+                        className="rounded border-gray-300 dark:border-gray-600 text-blue-600"
+                      />
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Mark as successful
+                      </span>
+                    </label>
+                  </div>
+                )}
               </div>
             </div>
             
-            <div className="space-y-4">
-              {/* Export Settings */}
-              <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded">
-                <h3 className="font-semibold mb-3 text-gray-900 dark:text-white">Batch Export Settings</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Order Status
-                    </label>
-                    <select
-                      value={exportSettings.status}
-                      onChange={(e) => setExportSettings({
-                        ...exportSettings,
-                        status: e.target.value,
-                        markAsSuccessful: e.target.value === 'pending' ? true : false
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                    >
-                      <option value="pending">Pending Orders</option>
-                      <option value="successful">Successful Orders</option>
-                      <option value="failed">Failed Orders</option>
-                    </select>
-                  </div>
-                  
-                  {exportSettings.status === 'pending' && (
-                    <div>
-                      <label className="flex items-center space-x-2 mt-7">
-                        <input
-                          type="checkbox"
-                          checked={exportSettings.markAsSuccessful}
-                          onChange={(e) => setExportSettings({
-                            ...exportSettings,
-                            markAsSuccessful: e.target.checked
-                          })}
-                          className="rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-blue-600 focus:ring-blue-500 dark:focus:ring-blue-400"
-                        />
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Mark as successful after export
-                        </span>
-                      </label>
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Warning Message */}
-              {exportSettings.markAsSuccessful && exportPreview.impactSummary && (
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded p-4">
-                  <div className="flex">
-                    <ExclamationTriangleIcon className="h-6 w-6 text-red-600 dark:text-red-400 mr-2" />
-                    <div>
-                      <h4 className="font-semibold text-red-900 dark:text-red-300">Critical Warning</h4>
-                      <p className="text-sm text-red-700 dark:text-red-400 mt-1">
-                        {exportPreview.impactSummary.warning}
-                      </p>
-                      <ul className="text-sm text-red-700 dark:text-red-400 mt-2 space-y-1">
-                        <li>• Total orders to process: {exportPreview.impactSummary.totalOrdersToProcess}</li>
-                        <li>• Total amount to deduct: {formatCurrency(exportPreview.impactSummary.totalAmountToDeduct)}</li>
-                        <li>• Orders with insufficient balance: {exportPreview.impactSummary.ordersWithInsufficientBalance}</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Preview Data */}
-              <div>
-                <h3 className="font-semibold mb-2 text-gray-900 dark:text-white">
-                  Batch Preview ({exportPreview.count} orders, max 40 will be exported)
-                </h3>
-                <div className="bg-gray-50 dark:bg-gray-900 rounded overflow-hidden">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-gray-100 dark:bg-gray-800">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Transaction ID</th>
-                        <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Beneficiary</th>
-                        <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Capacity</th>
-                        <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Status</th>
-                        {exportSettings.markAsSuccessful && (
-                          <th className="px-4 py-2 text-left text-gray-700 dark:text-gray-300">Can Process</th>
-                        )}
+            {/* Preview Data */}
+            <div>
+              <h3 className="font-semibold mb-2 text-gray-900 dark:text-white">
+                Preview ({exportPreview.count} orders)
+              </h3>
+              <div className="bg-gray-50 dark:bg-gray-900 rounded overflow-hidden">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-100 dark:bg-gray-800">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Transaction ID</th>
+                      <th className="px-4 py-2 text-left">Beneficiary</th>
+                      <th className="px-4 py-2 text-left">Capacity</th>
+                      <th className="px-4 py-2 text-left">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {exportPreview.data.slice(0, 5).map((item, idx) => (
+                      <tr key={idx}>
+                        <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{item.transactionId}</td>
+                        <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{item.beneficiaryNumber}</td>
+                        <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{item.capacity}</td>
+                        <td className="px-4 py-2">{getStatusBadge(item.currentStatus)}</td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {exportPreview.data.slice(0, 10).map((item, idx) => (
-                        <tr key={idx}>
-                          <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{item.transactionId}</td>
-                          <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{item.beneficiaryNumber}</td>
-                          <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{item.capacity}</td>
-                          <td className="px-4 py-2">
-                            {getStatusBadge(item.currentStatus)}
-                          </td>
-                          {exportSettings.markAsSuccessful && (
-                            <td className="px-4 py-2">
-                              {item.sufficientBalance ? (
-                                <CheckCircleIcon className="h-5 w-5 text-green-500 dark:text-green-400" />
-                              ) : (
-                                <XCircleIcon className="h-5 w-5 text-red-500 dark:text-red-400" />
-                              )}
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {exportPreview.data.length > 10 && (
-                    <div className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-center text-sm text-gray-600 dark:text-gray-400">
-                      ... and {exportPreview.data.length - 10} more orders
-                    </div>
-                  )}
-                </div>
+                    ))}
+                  </tbody>
+                </table>
+                {exportPreview.data.length > 5 && (
+                  <div className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-center text-sm text-gray-600 dark:text-gray-400">
+                    ... and {exportPreview.data.length - 5} more
+                  </div>
+                )}
               </div>
             </div>
             
             <div className="mt-6 flex justify-between">
               <button
-                onClick={() => handleExportPreview()}
+                onClick={handleExportPreview}
                 className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
-                Refresh Preview
+                Refresh
               </button>
               <div className="space-x-3">
                 <button
                   onClick={() => {
                     setShowExportModal(false);
                     setExportPreview(null);
-                    setExportSettings({
-                      status: 'pending',
-                      markAsSuccessful: true
-                    });
                   }}
                   className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={() => handleExportExcel()}
+                  onClick={handleExportExcel}
+                  disabled={exportInProgress}
                   className={`px-4 py-2 rounded-md text-white ${
-                    exportSettings.markAsSuccessful 
-                      ? 'bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600' 
-                      : 'bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600'
+                    exportInProgress
+                      ? 'bg-gray-400 cursor-not-allowed'
+                      : exportSettings.markAsSuccessful 
+                        ? 'bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600' 
+                        : 'bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600'
                   }`}
                 >
-                  {exportSettings.markAsSuccessful 
-                    ? 'Create Batch & Mark as Successful' 
-                    : 'Create Batch Export'}
+                  {exportInProgress ? (
+                    <span className="flex items-center">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Exporting...
+                    </span>
+                  ) : (
+                    exportSettings.markAsSuccessful 
+                      ? 'Export & Process' 
+                      : 'Export Batch'
+                  )}
                 </button>
               </div>
             </div>
@@ -949,76 +1143,22 @@ export default function TransactionsPage() {
                     {formatCurrency(selectedTransaction.amount)}
                   </p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Date</label>
-                  <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                    {formatDate(selectedTransaction.createdAt)}
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Reference</label>
-                  <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                    {selectedTransaction.reference || 'N/A'}
-                  </p>
-                </div>
               </div>
 
-              <div className="border-t dark:border-gray-700 pt-4">
-                <h3 className="font-semibold mb-2 text-gray-900 dark:text-white">User Information</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Name</label>
-                    <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                      {selectedTransaction.user?.fullName}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Email</label>
-                    <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                      {selectedTransaction.user?.email}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Phone</label>
-                    <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                      {selectedTransaction.user?.phone}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Role</label>
-                    <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                      {selectedTransaction.user?.role}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {selectedTransaction.dataDetails && (
+              {selectedTransaction.user && (
                 <div className="border-t dark:border-gray-700 pt-4">
-                  <h3 className="font-semibold mb-2 text-gray-900 dark:text-white">Data Details</h3>
+                  <h3 className="font-semibold mb-2 text-gray-900 dark:text-white">User Information</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Product</label>
+                      <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Name</label>
                       <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                        {selectedTransaction.dataDetails.product?.name}
+                        {selectedTransaction.user.fullName}
                       </p>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Beneficiary</label>
+                      <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Phone</label>
                       <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                        {selectedTransaction.dataDetails.beneficiaryNumber}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Capacity</label>
-                      <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                        {selectedTransaction.dataDetails.capacity}
-                      </p>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Network</label>
-                      <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
-                        {selectedTransaction.dataDetails.network}
+                        {selectedTransaction.user.phone}
                       </p>
                     </div>
                   </div>
