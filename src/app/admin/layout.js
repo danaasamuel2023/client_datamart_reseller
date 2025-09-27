@@ -101,7 +101,7 @@ export default function AdminLayout({ children }) {
       try {
         // Simulate API call to verify token and get user data
         // Replace with actual API endpoint
-        const response = await fetch('http://localhost:5000/api/admin/verify', {
+        const response = await fetch('https://server-datamart-reseller.onrender.com/api/admin/verify', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
