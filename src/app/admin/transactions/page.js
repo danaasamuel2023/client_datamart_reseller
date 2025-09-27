@@ -36,8 +36,7 @@ export default function TransactionsPage() {
   const [exportPreview, setExportPreview] = useState(null);
   const [exportSettings, setExportSettings] = useState({
     status: 'pending',
-    markAsSuccessful: true,
-    confirmExport: false
+    markAsSuccessful: true
   });
   const router = useRouter();
 
@@ -173,11 +172,11 @@ export default function TransactionsPage() {
     }
   };
 
-  const handleExportExcel = async () => {
+  const handleExportExcel = async (skipConfirmation = false) => {
     try {
       const token = localStorage.getItem('Token');
       
-      if (exportSettings.status === 'pending' && exportSettings.markAsSuccessful && !exportSettings.confirmExport) {
+      if (exportSettings.status === 'pending' && exportSettings.markAsSuccessful && !skipConfirmation) {
         const confirmed = window.confirm(
           'WARNING: You are about to create a batch export of pending orders and mark them as successful. ' +
           'This will deduct amounts from user wallets and cannot be undone. ' +
@@ -186,8 +185,8 @@ export default function TransactionsPage() {
         
         if (!confirmed) return;
         
-        setExportSettings({ ...exportSettings, confirmExport: true });
-        setTimeout(() => handleExportExcel(), 100);
+        // Proceed with export without asking again
+        handleExportExcel(true);
         return;
       }
 
@@ -200,7 +199,6 @@ export default function TransactionsPage() {
         body: JSON.stringify({
           status: exportSettings.status,
           markAsSuccessful: exportSettings.markAsSuccessful,
-          confirmExport: exportSettings.confirmExport,
           ...(startDate && { startDate }),
           ...(endDate && { endDate })
         })
@@ -235,8 +233,7 @@ export default function TransactionsPage() {
         
         setExportSettings({
           status: 'pending',
-          markAsSuccessful: true,
-          confirmExport: false
+          markAsSuccessful: true
         });
         setShowExportModal(false);
         
@@ -803,8 +800,7 @@ export default function TransactionsPage() {
                           checked={exportSettings.markAsSuccessful}
                           onChange={(e) => setExportSettings({
                             ...exportSettings,
-                            markAsSuccessful: e.target.checked,
-                            confirmExport: false
+                            markAsSuccessful: e.target.checked
                           })}
                           className="rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-blue-600 focus:ring-blue-500 dark:focus:ring-blue-400"
                         />
@@ -900,8 +896,7 @@ export default function TransactionsPage() {
                     setExportPreview(null);
                     setExportSettings({
                       status: 'pending',
-                      markAsSuccessful: true,
-                      confirmExport: false
+                      markAsSuccessful: true
                     });
                   }}
                   className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -909,7 +904,7 @@ export default function TransactionsPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={handleExportExcel}
+                  onClick={() => handleExportExcel()}
                   className={`px-4 py-2 rounded-md text-white ${
                     exportSettings.markAsSuccessful 
                       ? 'bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600' 
