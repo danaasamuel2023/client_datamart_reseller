@@ -772,9 +772,14 @@ export default function DataMartMainPage() {
               
               <nav className="hidden lg:flex items-center gap-6 ml-8">
                 <a href="#" className="text-yellow-400 font-medium hover:text-yellow-500 transition-colors">Home</a>
-                <a href="#products" className="text-gray-300 hover:text-white transition-colors">Products</a>
-                <a href="#bulk" className="text-gray-300 hover:text-white transition-colors">Bulk Orders</a>
-                <a href="#api" className="text-gray-300 hover:text-white transition-colors">API</a>
+                <a href="/orders" className="text-gray-300 hover:text-white transition-colors">Orders</a>
+                <button 
+                  onClick={() => setPurchaseMode('bulk')}
+                  className="text-gray-300 hover:text-white transition-colors"
+                >
+                  Bulk Orders
+                </button>
+                <a href="/profile" className="text-gray-300 hover:text-white transition-colors">Profile</a>
               </nav>
             </div>
             
@@ -848,21 +853,27 @@ export default function DataMartMainPage() {
                   <Home className="w-5 h-5" />
                   Home
                 </a>
-                <a href="#products" className="flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-gray-800 rounded-lg">
+                <a href="/orders" className="flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-gray-800 rounded-lg">
                   <Package className="w-5 h-5" />
-                  Products
+                  Orders
                 </a>
-                <a href="#bulk" className="flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-gray-800 rounded-lg">
+                <button 
+                  onClick={() => {
+                    setPurchaseMode('bulk');
+                    setShowMobileMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-gray-800 rounded-lg text-left"
+                >
                   <FileSpreadsheet className="w-5 h-5" />
                   Bulk Orders
+                </button>
+                <a href="/profile" className="flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-gray-800 rounded-lg">
+                  <User className="w-5 h-5" />
+                  Profile
                 </a>
-                <a href="#api" className="flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-gray-800 rounded-lg">
-                  <Settings className="w-5 h-5" />
-                  API
-                </a>
-                <a href="#history" className="flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-gray-800 rounded-lg">
-                  <History className="w-5 h-5" />
-                  History
+                <a href="/wallet" className="flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-gray-800 rounded-lg">
+                  <CreditCard className="w-5 h-5" />
+                  Top Up Wallet
                 </a>
               </nav>
               
@@ -875,7 +886,10 @@ export default function DataMartMainPage() {
                 <button className="w-full py-2 bg-yellow-400 text-gray-900 font-medium rounded-lg hover:bg-yellow-500 transition-colors">
                   Top Up Wallet
                 </button>
-                <button className="w-full py-2 bg-gray-700 text-white font-medium rounded-lg hover:bg-gray-600 transition-colors">
+                <button 
+                  onClick={() => router.push('/orders')}
+                  className="w-full py-2 bg-gray-700 text-white font-medium rounded-lg hover:bg-gray-600 transition-colors"
+                >
                   View Orders
                 </button>
                 <button 
