@@ -1,6 +1,5 @@
-'use client';
-
-import { useState, useEffect } from 'react';
+'use client'
+import React, { useState, useEffect } from 'react';
 import {
   UserGroupIcon,
   PencilSquareIcon,
@@ -19,7 +18,9 @@ import {
   EyeIcon,
   ClipboardDocumentIcon,
   SunIcon,
-  MoonIcon
+  MoonIcon,
+  ArrowPathIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 
 export default function UserManagementPage() {
@@ -34,6 +35,7 @@ export default function UserManagementPage() {
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
   const [copiedText, setCopiedText] = useState('');
+  const [error, setError] = useState(null);
   
   // Modal states
   const [showEditModal, setShowEditModal] = useState(false);
@@ -43,6 +45,7 @@ export default function UserManagementPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [showGeneratedCredentials, setShowGeneratedCredentials] = useState(false);
+  const [showRegenerateModal, setShowRegenerateModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   
   // Form states
@@ -59,6 +62,8 @@ export default function UserManagementPage() {
   });
   const [apiKeyForm, setApiKeyForm] = useState({ webhookUrl: '' });
   const [generatedCredentials, setGeneratedCredentials] = useState(null);
+
+  const SERVER_URL = 'https://server-datamart-reseller.onrender.com';
 
   useEffect(() => {
     // Check for saved dark mode preference
@@ -88,7 +93,14 @@ export default function UserManagementPage() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      setError(null);
       const token = localStorage.getItem('Token');
+      
+      if (!token) {
+        setError('No authentication token found. Please log in.');
+        setLoading(false);
+        return;
+      }
       
       const params = new URLSearchParams({
         page: currentPage,
@@ -100,17 +112,30 @@ export default function UserManagementPage() {
         ...(statusFilter && { status: statusFilter })
       });
       
-      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users?${params}`, {
+      const response = await fetch(`${SERVER_URL}/api/admin/users?${params}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setError('Session expired. Please log in again.');
+          // Optionally redirect to login
+          // window.location.href = '/login';
+          return;
+        }
+        throw new Error(`Failed to fetch users: ${response.status}`);
+      }
 
       const data = await response.json();
       if (data.success) {
         setUsers(data.data);
         setTotalPages(data.pagination.pages);
+      } else {
+        setError(data.message || 'Failed to fetch users');
       }
     } catch (error) {
       console.error('Error fetching users:', error);
+      setError('Error fetching users. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -119,7 +144,7 @@ export default function UserManagementPage() {
   const handleStatusChange = async (userId, newStatus, reason = '') => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users/${userId}/status`, {
+      const response = await fetch(`${SERVER_URL}/api/admin/users/${userId}/status`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -132,6 +157,8 @@ export default function UserManagementPage() {
       if (data.success) {
         alert(`User ${newStatus} successfully`);
         fetchUsers();
+      } else {
+        alert(data.message || 'Error updating user status');
       }
     } catch (error) {
       console.error('Error updating user status:', error);
@@ -142,7 +169,7 @@ export default function UserManagementPage() {
   const handleEditUser = async () => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users/${selectedUser._id}`, {
+      const response = await fetch(`${SERVER_URL}/api/admin/users/${selectedUser._id}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -156,6 +183,8 @@ export default function UserManagementPage() {
         alert('User updated successfully');
         setShowEditModal(false);
         fetchUsers();
+      } else {
+        alert(data.message || 'Error updating user');
       }
     } catch (error) {
       console.error('Error updating user:', error);
@@ -171,7 +200,7 @@ export default function UserManagementPage() {
 
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/wallet/adjust`, {
+      const response = await fetch(`${SERVER_URL}/api/admin/wallet/adjust`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -213,7 +242,7 @@ export default function UserManagementPage() {
 
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users/${selectedUser._id}/reset-password`, {
+      const response = await fetch(`${SERVER_URL}/api/admin/users/${selectedUser._id}/reset-password`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -227,6 +256,8 @@ export default function UserManagementPage() {
         alert('Password reset successfully');
         setShowPasswordModal(false);
         setPasswordForm({ newPassword: '', confirmPassword: '' });
+      } else {
+        alert(data.message || 'Error resetting password');
       }
     } catch (error) {
       console.error('Error resetting password:', error);
@@ -237,7 +268,44 @@ export default function UserManagementPage() {
   const handleGenerateApiKey = async () => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users/${selectedUser._id}/generate-api-key`, {
+      
+      if (!token) {
+        alert('Authentication token not found. Please log in again.');
+        return;
+      }
+      
+      const response = await fetch(`${SERVER_URL}/api/admin/users/${selectedUser._id}/generate-api-key`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ webhookUrl: apiKeyForm.webhookUrl })
+      });
+
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        setGeneratedCredentials(data.data);
+        setShowApiKeyModal(false);
+        setShowGeneratedCredentials(true);
+        setApiKeyForm({ webhookUrl: '' });
+        fetchUsers();
+      } else {
+        alert(data.message || 'Error generating API key');
+      }
+    } catch (error) {
+      console.error('Error generating API key:', error);
+      alert('Error generating API key. Please try again.');
+    }
+  };
+
+  const handleRegenerateApiKey = async () => {
+    if (!confirm('Are you sure you want to regenerate the API key? The current key will be invalidated.')) return;
+
+    try {
+      const token = localStorage.getItem('Token');
+      const response = await fetch(`${SERVER_URL}/api/admin/users/${selectedUser._id}/regenerate-api-key`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -249,14 +317,16 @@ export default function UserManagementPage() {
       const data = await response.json();
       if (data.success) {
         setGeneratedCredentials(data.data);
-        setShowApiKeyModal(false);
+        setShowRegenerateModal(false);
         setShowGeneratedCredentials(true);
         setApiKeyForm({ webhookUrl: '' });
         fetchUsers();
+      } else {
+        alert(data.message || 'Error regenerating API key');
       }
     } catch (error) {
-      console.error('Error generating API key:', error);
-      alert('Error generating API key');
+      console.error('Error regenerating API key:', error);
+      alert('Error regenerating API key');
     }
   };
 
@@ -265,7 +335,7 @@ export default function UserManagementPage() {
 
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users/${userId}/revoke-api-access`, {
+      const response = await fetch(`${SERVER_URL}/api/admin/users/${userId}/revoke-api-access`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -274,6 +344,8 @@ export default function UserManagementPage() {
       if (data.success) {
         alert('API access revoked successfully');
         fetchUsers();
+      } else {
+        alert(data.message || 'Error revoking API access');
       }
     } catch (error) {
       console.error('Error revoking API access:', error);
@@ -286,7 +358,7 @@ export default function UserManagementPage() {
 
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users/${userId}`, {
+      const response = await fetch(`${SERVER_URL}/api/admin/users/${userId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -295,6 +367,8 @@ export default function UserManagementPage() {
       if (data.success) {
         alert('User deleted successfully');
         fetchUsers();
+      } else {
+        alert(data.message || 'Error deleting user');
       }
     } catch (error) {
       console.error('Error deleting user:', error);
@@ -305,7 +379,7 @@ export default function UserManagementPage() {
   const handleCreateUser = async () => {
     try {
       const token = localStorage.getItem('Token');
-      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/users`, {
+      const response = await fetch(`${SERVER_URL}/api/admin/users`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -397,15 +471,34 @@ export default function UserManagementPage() {
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">User Management</h1>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Manage all platform users and their permissions</p>
             </div>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 transition-colors"
-            >
-              <PlusCircleIcon className="h-5 w-5 mr-2" />
-              Create User
-            </button>
+            <div className="flex space-x-3">
+              <button
+                onClick={fetchUsers}
+                className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-600 transition-colors"
+              >
+                <ArrowPathIcon className="h-5 w-5 mr-2" />
+                Refresh
+              </button>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 transition-colors"
+              >
+                <PlusCircleIcon className="h-5 w-5 mr-2" />
+                Create User
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Error Alert */}
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 p-4 rounded">
+            <div className="flex items-center">
+              <ExclamationTriangleIcon className="h-5 w-5 text-red-400 mr-2" />
+              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            </div>
+          </div>
+        )}
 
         {/* Filters and Search */}
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-4 transition-colors duration-300">
@@ -549,12 +642,23 @@ export default function UserManagementPage() {
                           {user.apiAccess?.enabled ? (
                             <>
                               <CheckCircleIcon className="h-5 w-5 text-green-500 dark:text-green-400" />
-                              <button
-                                onClick={() => handleRevokeApiAccess(user._id)}
-                                className="text-xs text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                              >
-                                Revoke
-                              </button>
+                              <div className="flex flex-col space-y-1">
+                                <button
+                                  onClick={() => {
+                                    setSelectedUser(user);
+                                    setShowRegenerateModal(true);
+                                  }}
+                                  className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                                >
+                                  Regenerate
+                                </button>
+                                <button
+                                  onClick={() => handleRevokeApiAccess(user._id)}
+                                  className="text-xs text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                                >
+                                  Revoke
+                                </button>
+                              </div>
                             </>
                           ) : (
                             <>
@@ -1099,6 +1203,60 @@ export default function UserManagementPage() {
                   className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
                 >
                   Generate API Key
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Regenerate API Key Modal */}
+        {showRegenerateModal && selectedUser && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white flex items-center">
+                <KeyIcon className="h-6 w-6 mr-2 text-purple-600 dark:text-purple-400" />
+                Regenerate API Key
+              </h2>
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 p-4 mb-4 rounded">
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                  <strong>Warning:</strong> Regenerating will invalidate the current API credentials. The user will need to update their integration with new credentials.
+                </p>
+              </div>
+              <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                Regenerate API credentials for: <span className="font-semibold text-gray-900 dark:text-white">{selectedUser.fullName}</span>
+              </p>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Webhook URL (Optional)
+                  </label>
+                  <input
+                    type="url"
+                    value={apiKeyForm.webhookUrl}
+                    onChange={(e) => setApiKeyForm({...apiKeyForm, webhookUrl: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
+                    placeholder="https://example.com/webhook"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Leave empty to keep existing webhook URL
+                  </p>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowRegenerateModal(false);
+                    setApiKeyForm({ webhookUrl: '' });
+                  }}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRegenerateApiKey}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
+                >
+                  Regenerate API Key
                 </button>
               </div>
             </div>

@@ -28,7 +28,8 @@ import {
   Shield,
   FileText,
   CheckCircle,
-  XCircle
+  XCircle,
+  Info
 } from 'lucide-react';
 
 const APIDocumentation = () => {
@@ -431,6 +432,302 @@ print(data)`
             </div>
           )}
 
+          {/* Authentication Section */}
+          {activeSection === 'authentication' && (
+            <div>
+              <h2 className="text-3xl font-bold text-white mb-6">Authentication</h2>
+              
+              <div className="bg-gray-800 rounded-lg p-6 mb-6">
+                <h3 className="text-xl font-semibold text-white mb-4">API Authentication</h3>
+                <p className="text-gray-300 mb-4">
+                  All API requests require authentication using API key and secret. These credentials must be included in the request headers.
+                </p>
+                
+                <div className="bg-yellow-500 bg-opacity-10 border border-yellow-500 rounded-lg p-4 mb-4">
+                  <div className="flex gap-2">
+                    <Key className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+                    <div>
+                      <p className="text-yellow-400 font-medium mb-1">Important Security Note</p>
+                      <p className="text-yellow-300 text-sm">
+                        Never expose your API secret in client-side code. Always make API calls from your backend server.
+                        Your API secret should be stored securely and never committed to version control.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-900 rounded-lg p-4">
+                  <h4 className="text-white font-medium mb-3">Required Headers</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-3">
+                      <code className="bg-gray-800 px-2 py-1 rounded text-yellow-400 text-sm">X-API-Key</code>
+                      <p className="text-gray-300 text-sm">Your unique API key (starts with pk_)</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <code className="bg-gray-800 px-2 py-1 rounded text-yellow-400 text-sm">X-API-Secret</code>
+                      <p className="text-gray-300 text-sm">Your API secret (starts with sk_)</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <code className="bg-gray-800 px-2 py-1 rounded text-yellow-400 text-sm">Content-Type</code>
+                      <p className="text-gray-300 text-sm">Always set to application/json</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gray-800 rounded-lg p-6 mb-6">
+                <h3 className="text-xl font-semibold text-white mb-4">Authentication Example</h3>
+                <div className="mb-3 flex gap-2">
+                  <button
+                    onClick={() => setSelectedLanguage('curl')}
+                    className={`px-3 py-1 rounded text-sm ${selectedLanguage === 'curl' ? 'bg-yellow-400 text-gray-900' : 'bg-gray-700 text-gray-300'}`}
+                  >
+                    cURL
+                  </button>
+                  <button
+                    onClick={() => setSelectedLanguage('javascript')}
+                    className={`px-3 py-1 rounded text-sm ${selectedLanguage === 'javascript' ? 'bg-yellow-400 text-gray-900' : 'bg-gray-700 text-gray-300'}`}
+                  >
+                    JavaScript
+                  </button>
+                  <button
+                    onClick={() => setSelectedLanguage('python')}
+                    className={`px-3 py-1 rounded text-sm ${selectedLanguage === 'python' ? 'bg-yellow-400 text-gray-900' : 'bg-gray-700 text-gray-300'}`}
+                  >
+                    Python
+                  </button>
+                </div>
+                <CodeBlock
+                  code={getExampleCode('auth', selectedLanguage)}
+                  language={selectedLanguage}
+                  id="auth-example"
+                />
+              </div>
+
+              <div className="bg-gray-800 rounded-lg p-6">
+                <h3 className="text-xl font-semibold text-white mb-4">Rate Limiting</h3>
+                <p className="text-gray-300 mb-4">
+                  API requests are rate-limited to ensure fair usage and system stability.
+                </p>
+                <div className="bg-gray-900 rounded-lg p-4">
+                  <ul className="space-y-2">
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-gray-300">Default rate limit: <span className="text-yellow-400 font-mono">60 requests/minute</span></p>
+                      </div>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-gray-300">Rate limit is per API key</p>
+                      </div>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-gray-300">Exceeding the limit returns a 429 status code</p>
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Account & Balance Section */}
+          {activeSection === 'account' && (
+            <div>
+              <h2 className="text-3xl font-bold text-white mb-6">Account & Balance API</h2>
+              
+              <EndpointCard
+                method="GET"
+                path="/v1/account"
+                description="Get account information"
+                id="get-account"
+              >
+                <div className="space-y-4">
+                  <p className="text-gray-300">Retrieve detailed account information including wallet balance and API usage statistics.</p>
+                  
+                  <div>
+                    <h4 className="text-white font-medium mb-2">Response</h4>
+                    <CodeBlock
+                      code={`{
+  "success": true,
+  "message": "Account information retrieved",
+  "data": {
+    "account": {
+      "name": "John Doe",
+      "email": "john@example.com",
+      "phone": "+233241234567",
+      "role": "dealer",
+      "status": "active"
+    },
+    "wallet": {
+      "balance": 5000.00,
+      "currency": "GHS"
+    },
+    "api": {
+      "requestCount": 1523,
+      "rateLimit": 100,
+      "webhookUrl": "https://example.com/webhook"
+    }
+  },
+  "timestamp": "2025-01-01T12:00:00.000Z"
+}`}
+                      id="account-response"
+                    />
+                  </div>
+                </div>
+              </EndpointCard>
+
+              <EndpointCard
+                method="GET"
+                path="/v1/balance"
+                description="Get wallet balance"
+                id="get-balance"
+              >
+                <div className="space-y-4">
+                  <p className="text-gray-300">Quick endpoint to check current wallet balance.</p>
+                  
+                  <div>
+                    <h4 className="text-white font-medium mb-2">Response</h4>
+                    <CodeBlock
+                      code={`{
+  "success": true,
+  "message": "Balance retrieved",
+  "data": {
+    "balance": 5000.00,
+    "currency": "GHS",
+    "formatted": "GHS 5000.00"
+  },
+  "timestamp": "2025-01-01T12:00:00.000Z"
+}`}
+                      id="balance-response"
+                    />
+                  </div>
+                </div>
+              </EndpointCard>
+            </div>
+          )}
+
+          {/* Products Section */}
+          {activeSection === 'products' && (
+            <div>
+              <h2 className="text-3xl font-bold text-white mb-6">Products API</h2>
+              
+              <EndpointCard
+                method="GET"
+                path="/v1/products"
+                description="List all available products"
+                id="get-products"
+              >
+                <div className="space-y-4">
+                  <p className="text-gray-300">Get a list of all available data products with role-specific pricing.</p>
+                  
+                  <div>
+                    <h4 className="text-white font-medium mb-2">Query Parameters</h4>
+                    <ParameterTable
+                      parameters={[
+                        { name: 'category', type: 'string', required: false, description: 'Filter by product category' },
+                        { name: 'min_capacity', type: 'integer', required: false, description: 'Minimum capacity in MB' },
+                        { name: 'max_capacity', type: 'integer', required: false, description: 'Maximum capacity in MB' }
+                      ]}
+                    />
+                  </div>
+
+                  <div>
+                    <h4 className="text-white font-medium mb-2">Response</h4>
+                    <CodeBlock
+                      code={`{
+  "success": true,
+  "message": "Products retrieved",
+  "data": {
+    "products": [
+      {
+        "product_code": "YELLOW_1GB_DAILY",
+        "name": "YELLOW",
+        "category": "daily",
+        "capacity": "1GB",
+        "capacity_value": 1,
+        "capacity_unit": "GB",
+        "validity": "24 hours",
+        "price": 5.00,
+        "currency": "GHS",
+        "status": "active"
+      },
+      {
+        "product_code": "YELLOW_2GB_DAILY",
+        "name": "YELLOW",
+        "category": "daily",
+        "capacity": "2GB",
+        "capacity_value": 2,
+        "capacity_unit": "GB",
+        "validity": "24 hours",
+        "price": 10.00,
+        "currency": "GHS",
+        "status": "active"
+      }
+    ],
+    "total": 2
+  }
+}`}
+                      id="products-response"
+                    />
+                  </div>
+                </div>
+              </EndpointCard>
+
+              <EndpointCard
+                method="GET"
+                path="/v1/capacities"
+                description="Get available capacities"
+                id="get-capacities"
+              >
+                <div className="space-y-4">
+                  <p className="text-gray-300">List all available data capacities grouped with their respective products.</p>
+                  
+                  <div>
+                    <h4 className="text-white font-medium mb-2">Response</h4>
+                    <CodeBlock
+                      code={`{
+  "success": true,
+  "message": "Available capacities retrieved",
+  "data": {
+    "capacities": [
+      {
+        "capacity": "1GB",
+        "products": [
+          {
+            "name": "YELLOW",
+            "validity": "24 hours",
+            "price": 5.00
+          }
+        ]
+      },
+      {
+        "capacity": "2GB",
+        "products": [
+          {
+            "name": "YELLOW",
+            "validity": "24 hours",
+            "price": 10.00
+          }
+        ]
+      }
+    ],
+    "total": 2,
+    "price_tier": "dealer"
+  }
+}`}
+                      id="capacities-response"
+                    />
+                  </div>
+                </div>
+              </EndpointCard>
+            </div>
+          )}
+
           {/* Single Purchase Section */}
           {activeSection === 'purchase' && (
             <div>
@@ -680,7 +977,312 @@ print(data)`
             </div>
           )}
 
-          {/* Add other sections as needed... */}
+          {/* Transactions Section */}
+          {activeSection === 'transactions' && (
+            <div>
+              <h2 className="text-3xl font-bold text-white mb-6">Transactions API</h2>
+              
+              <EndpointCard
+                method="GET"
+                path="/v1/transactions"
+                description="Get transaction history"
+                id="get-transactions"
+              >
+                <div className="space-y-4">
+                  <p className="text-gray-300">Retrieve your transaction history with filtering and pagination options.</p>
+                  
+                  <div>
+                    <h4 className="text-white font-medium mb-2">Query Parameters</h4>
+                    <ParameterTable
+                      parameters={[
+                        { name: 'status', type: 'string', required: false, description: 'Filter by status (pending, successful, failed)' },
+                        { name: 'start_date', type: 'string', required: false, description: 'Start date (ISO format)' },
+                        { name: 'end_date', type: 'string', required: false, description: 'End date (ISO format)' },
+                        { name: 'page', type: 'integer', required: false, description: 'Page number (default: 1)' },
+                        { name: 'limit', type: 'integer', required: false, description: 'Results per page (default: 20, max: 100)' }
+                      ]}
+                    />
+                  </div>
+                </div>
+              </EndpointCard>
+
+              <EndpointCard
+                method="GET"
+                path="/v1/transactions/:reference"
+                description="Get transaction status"
+                id="get-transaction"
+              >
+                <div className="space-y-4">
+                  <p className="text-gray-300">Check the status of a specific transaction using its reference.</p>
+                  
+                  <div>
+                    <h4 className="text-white font-medium mb-2">Response</h4>
+                    <CodeBlock
+                      code={`{
+  "success": true,
+  "message": "Transaction retrieved",
+  "data": {
+    "reference": "API1234567890ABCD",
+    "transaction_id": "65abc123def456",
+    "status": "successful",
+    "product": {
+      "name": "YELLOW",
+      "capacity": "2GB"
+    },
+    "beneficiary": "0241234567",
+    "amount": 10.00,
+    "currency": "GHS",
+    "created_at": "2025-01-01T12:00:00.000Z",
+    "completed_at": "2025-01-01T12:05:00.000Z",
+    "failure_reason": null
+  }
+}`}
+                      id="transaction-status-response"
+                    />
+                  </div>
+                </div>
+              </EndpointCard>
+            </div>
+          )}
+
+          {/* Webhooks Section */}
+          {activeSection === 'webhooks' && (
+            <div>
+              <h2 className="text-3xl font-bold text-white mb-6">Webhooks</h2>
+              
+              <div className="bg-gray-800 rounded-lg p-6 mb-6">
+                <h3 className="text-xl font-semibold text-white mb-4">Webhook Configuration</h3>
+                <p className="text-gray-300 mb-4">
+                  Configure a webhook URL to receive real-time notifications about transaction status changes and other events.
+                </p>
+                
+                <div className="bg-blue-500 bg-opacity-10 border border-blue-500 rounded-lg p-4">
+                  <div className="flex gap-2">
+                    <Info className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                    <div>
+                      <p className="text-blue-400 font-medium mb-1">Webhook Security</p>
+                      <p className="text-blue-300 text-sm">
+                        All webhook requests include a signature in the X-Platform-Signature header. 
+                        Verify this signature using your API secret to ensure the webhook is from our platform.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <EndpointCard
+                method="PUT"
+                path="/v1/webhook"
+                description="Update webhook URL"
+                id="put-webhook"
+              >
+                <div className="space-y-4">
+                  <p className="text-gray-300">Configure or update your webhook URL.</p>
+                  
+                  <div>
+                    <h4 className="text-white font-medium mb-2">Request Body</h4>
+                    <ParameterTable
+                      parameters={[
+                        { name: 'webhook_url', type: 'string', required: true, description: 'Your webhook endpoint URL' }
+                      ]}
+                    />
+                  </div>
+                </div>
+              </EndpointCard>
+
+              <EndpointCard
+                method="POST"
+                path="/v1/webhook/test"
+                description="Test webhook"
+                id="test-webhook"
+              >
+                <div className="space-y-4">
+                  <p className="text-gray-300">Send a test webhook to your configured URL.</p>
+                  
+                  <div>
+                    <h4 className="text-white font-medium mb-2">Webhook Events</h4>
+                    <div className="bg-gray-900 rounded-lg p-4">
+                      <ul className="space-y-2">
+                        <li className="flex items-start gap-3">
+                          <code className="bg-gray-800 px-2 py-1 rounded text-yellow-400 text-sm">purchase.pending</code>
+                          <p className="text-gray-300 text-sm">Purchase initiated and pending processing</p>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <code className="bg-gray-800 px-2 py-1 rounded text-yellow-400 text-sm">purchase.successful</code>
+                          <p className="text-gray-300 text-sm">Purchase completed successfully</p>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <code className="bg-gray-800 px-2 py-1 rounded text-yellow-400 text-sm">purchase.failed</code>
+                          <p className="text-gray-300 text-sm">Purchase failed</p>
+                        </li>
+                        <li className="flex items-start gap-3">
+                          <code className="bg-gray-800 px-2 py-1 rounded text-yellow-400 text-sm">bulk_purchase.completed</code>
+                          <p className="text-gray-300 text-sm">Bulk purchase completed</p>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </EndpointCard>
+            </div>
+          )}
+
+          {/* Statistics Section */}
+          {activeSection === 'statistics' && (
+            <div>
+              <h2 className="text-3xl font-bold text-white mb-6">Statistics API</h2>
+              
+              <EndpointCard
+                method="GET"
+                path="/v1/statistics"
+                description="Get API usage statistics"
+                id="get-statistics"
+              >
+                <div className="space-y-4">
+                  <p className="text-gray-300">Retrieve detailed statistics about your API usage and transactions.</p>
+                  
+                  <div>
+                    <h4 className="text-white font-medium mb-2">Query Parameters</h4>
+                    <ParameterTable
+                      parameters={[
+                        { name: 'period', type: 'string', required: false, description: 'Time period: 24hours, 7days, 30days (default: 7days)' }
+                      ]}
+                    />
+                  </div>
+
+                  <div>
+                    <h4 className="text-white font-medium mb-2">Response</h4>
+                    <CodeBlock
+                      code={`{
+  "success": true,
+  "message": "Statistics retrieved",
+  "data": {
+    "period": "7days",
+    "statistics": {
+      "api_usage": {
+        "total_requests": 1523,
+        "successful_requests": 1500,
+        "failed_requests": 23,
+        "avg_response_time": 245
+      },
+      "transactions": {
+        "successful": 450,
+        "failed": 12,
+        "pending": 38,
+        "total_amount": 25000.00
+      }
+    }
+  }
+}`}
+                      id="statistics-response"
+                    />
+                  </div>
+                </div>
+              </EndpointCard>
+            </div>
+          )}
+
+          {/* Error Codes Section */}
+          {activeSection === 'errors' && (
+            <div>
+              <h2 className="text-3xl font-bold text-white mb-6">Error Codes</h2>
+              
+              <div className="bg-gray-800 rounded-lg p-6 mb-6">
+                <h3 className="text-xl font-semibold text-white mb-4">Error Response Format</h3>
+                <p className="text-gray-300 mb-4">
+                  All API errors follow a consistent format to help you handle errors effectively.
+                </p>
+                
+                <CodeBlock
+                  code={`{
+  "success": false,
+  "message": "Human-readable error message",
+  "error": {
+    "code": "ERROR_CODE",
+    "details": "Additional error information"
+  },
+  "timestamp": "2025-01-01T12:00:00.000Z"
+}`}
+                  id="error-format"
+                />
+              </div>
+
+              <div className="bg-gray-800 rounded-lg p-6">
+                <h3 className="text-xl font-semibold text-white mb-4">Common Error Codes</h3>
+                
+                <div className="space-y-4">
+                  <div className="bg-gray-900 rounded-lg p-4">
+                    <h4 className="text-white font-medium mb-3">Authentication Errors</h4>
+                    <ul className="space-y-2">
+                      <li className="flex items-start gap-3">
+                        <code className="bg-gray-800 px-2 py-1 rounded text-red-400 text-sm">401</code>
+                        <div>
+                          <p className="text-gray-300 font-medium">UNAUTHORIZED</p>
+                          <p className="text-gray-400 text-sm">Missing or invalid API credentials</p>
+                        </div>
+                      </li>
+                      <li className="flex items-start gap-3">
+                        <code className="bg-gray-800 px-2 py-1 rounded text-red-400 text-sm">403</code>
+                        <div>
+                          <p className="text-gray-300 font-medium">FORBIDDEN</p>
+                          <p className="text-gray-400 text-sm">Valid credentials but insufficient permissions</p>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-gray-900 rounded-lg p-4">
+                    <h4 className="text-white font-medium mb-3">Validation Errors</h4>
+                    <ul className="space-y-2">
+                      <li className="flex items-start gap-3">
+                        <code className="bg-gray-800 px-2 py-1 rounded text-yellow-400 text-sm">INVALID_PHONE_NUMBER</code>
+                        <p className="text-gray-300 text-sm">Phone number format is invalid</p>
+                      </li>
+                      <li className="flex items-start gap-3">
+                        <code className="bg-gray-800 px-2 py-1 rounded text-yellow-400 text-sm">INVALID_CAPACITY_FORMAT</code>
+                        <p className="text-gray-300 text-sm">Capacity format is invalid (use: 1GB, 500MB)</p>
+                      </li>
+                      <li className="flex items-start gap-3">
+                        <code className="bg-gray-800 px-2 py-1 rounded text-yellow-400 text-sm">PRODUCT_NOT_FOUND</code>
+                        <p className="text-gray-300 text-sm">Product with specified capacity not found</p>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-gray-900 rounded-lg p-4">
+                    <h4 className="text-white font-medium mb-3">Transaction Errors</h4>
+                    <ul className="space-y-2">
+                      <li className="flex items-start gap-3">
+                        <code className="bg-gray-800 px-2 py-1 rounded text-yellow-400 text-sm">INSUFFICIENT_BALANCE</code>
+                        <p className="text-gray-300 text-sm">Wallet balance insufficient for transaction</p>
+                      </li>
+                      <li className="flex items-start gap-3">
+                        <code className="bg-gray-800 px-2 py-1 rounded text-yellow-400 text-sm">DUPLICATE_REFERENCE</code>
+                        <p className="text-gray-300 text-sm">Transaction reference already exists</p>
+                      </li>
+                      <li className="flex items-start gap-3">
+                        <code className="bg-gray-800 px-2 py-1 rounded text-yellow-400 text-sm">EXCEEDS_LIMIT</code>
+                        <p className="text-gray-300 text-sm">Bulk order exceeds maximum limit</p>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div className="bg-gray-900 rounded-lg p-4">
+                    <h4 className="text-white font-medium mb-3">Rate Limiting</h4>
+                    <ul className="space-y-2">
+                      <li className="flex items-start gap-3">
+                        <code className="bg-gray-800 px-2 py-1 rounded text-orange-400 text-sm">429</code>
+                        <div>
+                          <p className="text-gray-300 font-medium">TOO_MANY_REQUESTS</p>
+                          <p className="text-gray-400 text-sm">Rate limit exceeded. Please slow down.</p>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>
