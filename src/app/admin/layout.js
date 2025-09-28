@@ -83,8 +83,8 @@ export default function AdminLayout({ children }) {
       badge: null 
     },
     { 
-      name: 'Notifications', 
-      href: '/admin/notifications', 
+      name: 'batches', 
+      href: '/admin/batches', 
       icon: BellIcon,
       badge: '3' 
     },

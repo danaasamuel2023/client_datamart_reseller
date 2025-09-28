@@ -22,7 +22,10 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Search,
-  ArrowLeft
+  ArrowLeft,
+  Send,
+  Info,
+  HelpCircle
 } from 'lucide-react';
 
 // API Base URL
@@ -37,6 +40,7 @@ export default function TransactionHistory() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [showStatusInfo, setShowStatusInfo] = useState(false);
   
   // Filters
   const [statusFilter, setStatusFilter] = useState('all');
@@ -58,6 +62,7 @@ export default function TransactionHistory() {
     successfulOrders: 0,
     failedOrders: 0,
     pendingOrders: 0,
+    sentOrders: 0,
     totalCredits: 0,
     totalDebits: 0,
     walletBalance: 0
@@ -117,13 +122,15 @@ export default function TransactionHistory() {
           if (tx.status === 'successful') acc.successfulOrders++;
           if (tx.status === 'failed') acc.failedOrders++;
           if (tx.status === 'pending') acc.pendingOrders++;
+          if (tx.status === 'sent') acc.sentOrders++;
           return acc;
         }, {
           totalSpent: 0,
           totalOrders: 0,
           successfulOrders: 0,
           failedOrders: 0,
-          pendingOrders: 0
+          pendingOrders: 0,
+          sentOrders: 0
         });
         
         setStats(prev => ({ ...prev, ...stats }));
@@ -243,13 +250,15 @@ export default function TransactionHistory() {
     switch (status?.toLowerCase()) {
       case 'successful':
       case 'completed':
-        return 'text-green-400';
+        return 'text-green-400 bg-green-400/10';
       case 'failed':
-        return 'text-red-400';
+        return 'text-red-400 bg-red-400/10';
       case 'pending':
-        return 'text-yellow-400';
+        return 'text-yellow-400 bg-yellow-400/10';
+      case 'sent':
+        return 'text-blue-400 bg-blue-400/10';
       default:
-        return 'text-gray-400';
+        return 'text-gray-400 bg-gray-400/10';
     }
   };
   
@@ -263,8 +272,26 @@ export default function TransactionHistory() {
         return <X className="w-4 h-4" />;
       case 'pending':
         return <Clock className="w-4 h-4" />;
+      case 'sent':
+        return <Send className="w-4 h-4" />;
       default:
         return <AlertCircle className="w-4 h-4" />;
+    }
+  };
+  
+  // Get status description
+  const getStatusDescription = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'successful':
+        return 'Data delivered successfully';
+      case 'failed':
+        return 'Transaction failed';
+      case 'pending':
+        return 'In queue to be sent to MTN';
+      case 'sent':
+        return 'Sent to MTN, processing';
+      default:
+        return '';
     }
   };
   
@@ -349,9 +376,73 @@ export default function TransactionHistory() {
         </div>
       </div>
       
+      {/* Status Information Banner */}
+      {activeTab === 'orders' && (
+        <div className="container mx-auto px-4 pt-6">
+          <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4 mb-6">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <Info className="w-5 h-5 text-blue-400" />
+                  <h3 className="text-white font-semibold">Order Status Guide</h3>
+                  <button
+                    onClick={() => setShowStatusInfo(!showStatusInfo)}
+                    className="ml-2 text-blue-400 hover:text-blue-300"
+                  >
+                    <HelpCircle className="w-4 h-4" />
+                  </button>
+                </div>
+                
+                {showStatusInfo && (
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-start gap-3">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium text-yellow-400 bg-yellow-400/10 min-w-[90px]">
+                        <Clock className="w-3 h-3" />
+                        Pending
+                      </span>
+                      <p className="text-gray-300 text-sm">Order is in queue waiting to be sent to MTN portal for processing</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium text-blue-400 bg-blue-400/10 min-w-[90px]">
+                        <Send className="w-3 h-3" />
+                        Sent
+                      </span>
+                      <p className="text-gray-300 text-sm">Order has been sent to MTN portal and is currently being processed (typically takes 15-30 minutes)</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium text-green-400 bg-green-400/10 min-w-[90px]">
+                        <Check className="w-3 h-3" />
+                        Successful
+                      </span>
+                      <p className="text-gray-300 text-sm">Data has been successfully delivered to the beneficiary number</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium text-red-400 bg-red-400/10 min-w-[90px]">
+                        <X className="w-3 h-3" />
+                        Failed
+                      </span>
+                      <p className="text-gray-300 text-sm">Transaction failed - amount will be refunded to your wallet</p>
+                    </div>
+                  </div>
+                )}
+                
+                {!showStatusInfo && (
+                  <div className="flex gap-4 text-xs">
+                    <span className="text-yellow-400">⚡ Pending = Queue</span>
+                    <span className="text-blue-400">📤 Sent = Processing at MTN</span>
+                    <span className="text-green-400">✓ Successful = Delivered</span>
+                    <span className="text-gray-400 ml-auto">Click ⓘ for details</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Stats Cards */}
       <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           {activeTab === 'orders' ? (
             <>
               <div className="bg-gray-800 rounded-lg p-4">
@@ -369,24 +460,16 @@ export default function TransactionHistory() {
                   <Check className="w-4 h-4 text-green-400" />
                 </div>
                 <p className="text-2xl font-bold text-white">{stats.successfulOrders}</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {stats.totalOrders > 0 
-                    ? `${((stats.successfulOrders / stats.totalOrders) * 100).toFixed(0)}% success rate`
-                    : '0% success rate'}
-                </p>
+                <p className="text-xs text-gray-500 mt-1">Delivered</p>
               </div>
               
               <div className="bg-gray-800 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-gray-400 text-sm">Failed</p>
-                  <X className="w-4 h-4 text-red-400" />
+                  <p className="text-gray-400 text-sm">Processing</p>
+                  <Send className="w-4 h-4 text-blue-400" />
                 </div>
-                <p className="text-2xl font-bold text-white">{stats.failedOrders}</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {stats.totalOrders > 0 
-                    ? `${((stats.failedOrders / stats.totalOrders) * 100).toFixed(0)}% of total`
-                    : '0% of total'}
-                </p>
+                <p className="text-2xl font-bold text-white">{stats.sentOrders}</p>
+                <p className="text-xs text-gray-500 mt-1">At MTN</p>
               </div>
               
               <div className="bg-gray-800 rounded-lg p-4">
@@ -395,12 +478,21 @@ export default function TransactionHistory() {
                   <Clock className="w-4 h-4 text-yellow-400" />
                 </div>
                 <p className="text-2xl font-bold text-white">{stats.pendingOrders}</p>
-                <p className="text-xs text-gray-500 mt-1">Processing</p>
+                <p className="text-xs text-gray-500 mt-1">In Queue</p>
+              </div>
+              
+              <div className="bg-gray-800 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-gray-400 text-sm">Failed</p>
+                  <X className="w-4 h-4 text-red-400" />
+                </div>
+                <p className="text-2xl font-bold text-white">{stats.failedOrders}</p>
+                <p className="text-xs text-gray-500 mt-1">Refunded</p>
               </div>
             </>
           ) : (
             <>
-              <div className="bg-gray-800 rounded-lg p-4">
+              <div className="bg-gray-800 rounded-lg p-4 lg:col-span-2">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-gray-400 text-sm">Wallet Balance</p>
                   <Wallet className="w-4 h-4 text-yellow-400" />
@@ -508,8 +600,9 @@ export default function TransactionHistory() {
                 <option value="all">All Status</option>
                 {activeTab === 'orders' ? (
                   <>
-                    <option value="successful">Successful</option>
-                    <option value="pending">Pending</option>
+                    <option value="successful">Successful (Delivered)</option>
+                    <option value="sent">Sent (Processing)</option>
+                    <option value="pending">Pending (Queue)</option>
                     <option value="failed">Failed</option>
                   </>
                 ) : (
@@ -620,10 +713,17 @@ export default function TransactionHistory() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(tx.status)}`}>
-                        {getStatusIcon(tx.status)}
-                        {tx.status}
-                      </span>
+                      <div className="flex flex-col gap-1">
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(tx.status)}`}>
+                          {getStatusIcon(tx.status)}
+                          {tx.status}
+                        </span>
+                        {activeTab === 'orders' && (
+                          <span className="text-xs text-gray-500">
+                            {getStatusDescription(tx.status)}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400 font-mono">
                       {tx.reference || tx.transactionId}
@@ -647,10 +747,17 @@ export default function TransactionHistory() {
                       {formatDate(tx.createdAt || tx.date)}
                     </p>
                   </div>
-                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(tx.status)}`}>
-                    {getStatusIcon(tx.status)}
-                    {tx.status}
-                  </span>
+                  <div className="text-right">
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(tx.status)}`}>
+                      {getStatusIcon(tx.status)}
+                      {tx.status}
+                    </span>
+                    {activeTab === 'orders' && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {getStatusDescription(tx.status)}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 
                 <div className="flex justify-between items-end">

@@ -1,4 +1,4 @@
-// app/page.jsx - DATAMART ENHANCED WITH PROPER EXCEL PROCESSING
+// app/page.jsx - DATAMART ENHANCED WITH API DOCUMENTATION NAVIGATION
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -44,7 +44,8 @@ import {
   Eye,
   EyeOff,
   Trash2,
-  Edit2
+  Edit2,
+  Terminal // Added Terminal icon for API Docs
 } from 'lucide-react';
 
 // API Base URL
@@ -944,7 +945,7 @@ export default function DataMartMainPage() {
 
   return (
     <div className="min-h-screen bg-[#2a2d3a] relative">
-      {/* RESPONSIVE HEADER - Same as original */}
+      {/* RESPONSIVE HEADER WITH API DOCS NAVIGATION */}
       <header className="bg-[#1f2128] border-b border-gray-700 sticky top-0 z-30">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16">
@@ -959,6 +960,7 @@ export default function DataMartMainPage() {
               
               <h1 className="text-xl sm:text-2xl font-bold text-yellow-400">DATAMART</h1>
               
+              {/* UPDATED DESKTOP NAVIGATION WITH API DOCS */}
               <nav className="hidden lg:flex items-center gap-6 ml-8">
                 <a href="#" className="text-yellow-400 font-medium hover:text-yellow-500 transition-colors">Home</a>
                 <a href="/orders" className="text-gray-300 hover:text-white transition-colors">Orders</a>
@@ -968,6 +970,10 @@ export default function DataMartMainPage() {
                 >
                   Bulk Orders
                 </button>
+                <a href="/api-docs" className="text-gray-300 hover:text-white transition-colors flex items-center gap-1">
+                  <Terminal className="w-4 h-4" />
+                  API Docs
+                </a>
                 <a href="/profile" className="text-gray-300 hover:text-white transition-colors">Profile</a>
               </nav>
             </div>
@@ -1012,7 +1018,7 @@ export default function DataMartMainPage() {
         </div>
       </header>
 
-      {/* MOBILE MENU DRAWER - Same as original */}
+      {/* MOBILE MENU DRAWER WITH API DOCS */}
       {showMobileMenu && (
         <div className="lg:hidden fixed inset-0 z-40">
           <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setShowMobileMenu(false)} />
@@ -1037,6 +1043,7 @@ export default function DataMartMainPage() {
                 </div>
               )}
               
+              {/* UPDATED MOBILE NAVIGATION WITH API DOCS */}
               <nav className="space-y-2">
                 <a href="#" className="flex items-center gap-3 px-3 py-2 text-yellow-400 bg-gray-800 rounded-lg">
                   <Home className="w-5 h-5" />
@@ -1056,6 +1063,10 @@ export default function DataMartMainPage() {
                   <FileSpreadsheet className="w-5 h-5" />
                   Bulk Orders
                 </button>
+                <a href="/api-docs" className="flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-gray-800 rounded-lg">
+                  <Terminal className="w-5 h-5" />
+                  API Documentation
+                </a>
                 <a href="/profile" className="flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-gray-800 rounded-lg">
                   <User className="w-5 h-5" />
                   Profile
@@ -1072,6 +1083,13 @@ export default function DataMartMainPage() {
               </div>
               
               <div className="mt-4 space-y-2">
+                <button 
+                  onClick={() => router.push('/api-docs')}
+                  className="w-full py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Terminal className="w-4 h-4" />
+                  View API Docs
+                </button>
                 <button className="w-full py-2 bg-yellow-400 text-gray-900 font-medium rounded-lg hover:bg-yellow-500 transition-colors">
                   Top Up Wallet
                 </button>
@@ -1166,7 +1184,7 @@ export default function DataMartMainPage() {
         </div>
       </div>
 
-      {/* MAIN CONTENT */}
+      {/* MAIN CONTENT - Same as original */}
       <main className="container mx-auto px-4 py-6 sm:py-8 lg:py-12">
         {/* Error Message Display */}
         {error && !selectedProduct && purchaseMode !== 'bulk' && (
@@ -1838,7 +1856,7 @@ export default function DataMartMainPage() {
         />
       )}
       
-      {/* ACCOUNT DROPDOWN - Same as original */}
+      {/* UPDATED ACCOUNT DROPDOWN WITH API DOCS */}
       {showAccountMenu && (
         <div className="absolute top-16 right-4 w-48 bg-gray-800 rounded-lg shadow-lg py-1 z-50">
           {userData && (
@@ -1859,6 +1877,10 @@ export default function DataMartMainPage() {
             <CreditCard className="w-3 h-3" />
             Top Up Wallet
           </a>
+          <a href="/api-docs" className="flex items-center gap-2 px-3 py-1.5 text-gray-300 hover:bg-gray-700 hover:text-white text-sm">
+            <Terminal className="w-3 h-3" />
+            API Documentation
+          </a>
           {userData?.role === 'admin' && (
             <>
               <hr className="my-1 border-gray-700" />
@@ -1866,6 +1888,18 @@ export default function DataMartMainPage() {
                 <Shield className="w-3 h-3" />
                 Admin Panel
               </a>
+            </>
+          )}
+          {(userData?.role === 'dealer' || userData?.role === 'supplier') && (
+            <>
+              <hr className="my-1 border-gray-700" />
+              <div className="px-3 py-2">
+                <p className="text-xs text-gray-400 mb-1">API Access</p>
+                <a href="/api-docs" className="flex items-center gap-2 py-1 text-yellow-400 hover:text-yellow-500 text-sm">
+                  <Terminal className="w-3 h-3" />
+                  View API Docs
+                </a>
+              </div>
             </>
           )}
           <hr className="my-1 border-gray-700" />

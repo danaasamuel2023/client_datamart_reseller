@@ -14,7 +14,9 @@ import {
   PencilSquareIcon,
   ExclamationTriangleIcon,
   DocumentArrowDownIcon,
-  FolderIcon
+  FolderIcon,
+  InformationCircleIcon,
+  PaperAirplaneIcon
 } from '@heroicons/react/24/outline';
 
 export default function TransactionsPage() {
@@ -38,15 +40,25 @@ export default function TransactionsPage() {
   const [statusUpdateReason, setStatusUpdateReason] = useState('');
   const [bulkStatusUpdate, setBulkStatusUpdate] = useState({ status: '', reason: '' });
   const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
+  const [exportStatus, setExportStatus] = useState(null);
   const [exportSettings, setExportSettings] = useState({
     status: 'pending',
-    markAsSuccessful: true
+    markAsSent: false // Changed from markAsSuccessful to markAsSent
   });
   const router = useRouter();
 
   useEffect(() => {
     fetchTransactions();
+    fetchExportStatus();
   }, [currentPage, statusFilter, typeFilter, searchTerm, startDate, endDate]);
+
+  useEffect(() => {
+    // Refresh export status every 30 seconds
+    const interval = setInterval(() => {
+      fetchExportStatus();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchTransactions = async () => {
     try {
@@ -81,6 +93,21 @@ export default function TransactionsPage() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchExportStatus = async () => {
+    try {
+      const token = localStorage.getItem('Token');
+      const response = await fetch('https://server-datamart-reseller.onrender.com/api/admin/system-status', {
+        headers: { 'x-auth-token': token }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setExportStatus(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching export status:', error);
     }
   };
 
@@ -196,7 +223,6 @@ export default function TransactionsPage() {
         },
         body: JSON.stringify({
           status: exportSettings.status,
-          markAsSuccessful: exportSettings.markAsSuccessful,
           ...(startDate && { startDate }),
           ...(endDate && { endDate })
         })
@@ -230,7 +256,7 @@ export default function TransactionsPage() {
       
       const requestBody = {
         status: exportSettings.status,
-        markAsSuccessful: exportSettings.markAsSuccessful,
+        markAsSuccessful: exportSettings.markAsSent, // This will mark as "sent" in new system
         confirmExport: true,
         ...(startDate && { startDate }),
         ...(endDate && { endDate })
@@ -276,34 +302,39 @@ export default function TransactionsPage() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         
-        const batchId = response.headers.get('X-Batch-ID') || 'export';
+        const exportId = response.headers.get('X-Export-ID') || 'export';
         
         a.href = url;
-        a.download = `batch_${batchId}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        a.download = `export_${exportId}_${new Date().toISOString().split('T')[0]}.xlsx`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
         
-        const exportSummary = response.headers.get('X-Export-Summary');
-        const summary = exportSummary ? JSON.parse(exportSummary) : null;
-        
         setExportSettings({
           status: 'pending',
-          markAsSuccessful: true
+          markAsSent: false
         });
         setShowExportModal(false);
         setExportInProgress(false);
         
-        setNotification({
-          type: 'success',
-          title: `Batch ${summary?.batchId || batchId} Exported!`,
-          message: summary ? `Exported: ${summary.exported} | Processed: ${summary.processed}` : 'Export completed'
-        });
-        
-        if (exportSettings.markAsSuccessful) {
-          fetchTransactions();
+        // Show appropriate notification based on action
+        if (exportSettings.markAsSent) {
+          setNotification({
+            type: 'info',
+            title: `Export ${exportId} - Orders Sent to MTN`,
+            message: `${exportPreview?.count || 0} orders exported and sent for processing. Estimated completion: 30 minutes.`
+          });
+        } else {
+          setNotification({
+            type: 'success',
+            title: `Export ${exportId} Completed`,
+            message: `${exportPreview?.count || 0} orders exported successfully.`
+          });
         }
+        
+        fetchTransactions();
+        fetchExportStatus();
       }
     } catch (error) {
       console.error('Error exporting batch:', error);
@@ -470,6 +501,7 @@ export default function TransactionsPage() {
     const statusStyles = {
       successful: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
       pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+      sent: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
       processing: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
       failed: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
       reversed: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
@@ -478,6 +510,8 @@ export default function TransactionsPage() {
     const statusIcons = {
       successful: <CheckCircleIcon className="h-4 w-4 inline mr-1" />,
       pending: <ClockIcon className="h-4 w-4 inline mr-1" />,
+      sent: <PaperAirplaneIcon className="h-4 w-4 inline mr-1" />,
+      processing: <ArrowPathIcon className="h-4 w-4 inline mr-1" />,
       failed: <XCircleIcon className="h-4 w-4 inline mr-1" />
     };
 
@@ -506,13 +540,46 @@ export default function TransactionsPage() {
     }
   };
 
+  // Export Status Bar Component
+  const ExportStatusBar = () => {
+    if (!exportStatus?.lastExport) return null;
+    
+    return (
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 mb-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <InformationCircleIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-2 flex-shrink-0" />
+            <div className="text-sm text-blue-900 dark:text-blue-100">
+              <span className="font-medium">Last Export:</span> {exportStatus.lastExportDisplay}
+              {exportStatus.lastExport?.status && (
+                <span className="ml-2">
+                  Status: <span className={`font-medium ${
+                    exportStatus.lastExport.status === 'completed' ? 'text-green-700 dark:text-green-400' : 
+                    exportStatus.lastExport.status === 'processing' ? 'text-blue-700 dark:text-blue-400' : 
+                    'text-yellow-700 dark:text-yellow-400'
+                  }`}>{exportStatus.lastExport.status}</span>
+                </span>
+              )}
+            </div>
+          </div>
+          {exportStatus.currentProcessing?.isProcessing && (
+            <span className="text-xs bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200 px-2 py-1 rounded flex items-center">
+              <ArrowPathIcon className="h-3 w-3 mr-1 animate-spin" />
+              Processing {exportStatus.currentProcessing.activeExports?.length || 0} export(s)
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // Notification Toast Component
   const NotificationToast = () => {
     useEffect(() => {
       if (notification) {
         const timer = setTimeout(() => {
           setNotification(null);
-        }, 3000); // 3 seconds
+        }, 5000); // 5 seconds for better readability
         return () => clearTimeout(timer);
       }
     }, [notification]);
@@ -524,11 +591,15 @@ export default function TransactionsPage() {
         <div className={`rounded-lg shadow-lg p-4 max-w-md ${
           notification.type === 'success' 
             ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700'
+            : notification.type === 'info'
+            ? 'bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700'
             : 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700'
         }`}>
           <div className="flex items-start">
             {notification.type === 'success' ? (
               <CheckCircleIcon className="h-5 w-5 text-green-400 dark:text-green-300 mt-0.5" />
+            ) : notification.type === 'info' ? (
+              <InformationCircleIcon className="h-5 w-5 text-blue-400 dark:text-blue-300 mt-0.5" />
             ) : (
               <XCircleIcon className="h-5 w-5 text-red-400 dark:text-red-300 mt-0.5" />
             )}
@@ -536,6 +607,8 @@ export default function TransactionsPage() {
               <h3 className={`text-sm font-medium ${
                 notification.type === 'success'
                   ? 'text-green-800 dark:text-green-200'
+                  : notification.type === 'info'
+                  ? 'text-blue-800 dark:text-blue-200'
                   : 'text-red-800 dark:text-red-200'
               }`}>
                 {notification.title}
@@ -544,6 +617,8 @@ export default function TransactionsPage() {
                 <div className={`mt-1 text-sm ${
                   notification.type === 'success'
                     ? 'text-green-700 dark:text-green-300'
+                    : notification.type === 'info'
+                    ? 'text-blue-700 dark:text-blue-300'
                     : 'text-red-700 dark:text-red-300'
                 }`}>
                   {notification.message}
@@ -595,6 +670,7 @@ export default function TransactionsPage() {
                 >
                   <option value="">Select status</option>
                   <option value="pending">Pending</option>
+                  <option value="sent">Sent to MTN</option>
                   <option value="successful">Successful</option>
                   <option value="failed">Failed</option>
                 </select>
@@ -684,6 +760,9 @@ export default function TransactionsPage() {
         </div>
       </div>
 
+      {/* Export Status Bar */}
+      <ExportStatusBar />
+
       {/* Filters */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
@@ -706,6 +785,7 @@ export default function TransactionsPage() {
             <option value="">All Status</option>
             <option value="successful">Successful</option>
             <option value="pending">Pending</option>
+            <option value="sent">Sent to MTN</option>
             <option value="processing">Processing</option>
             <option value="failed">Failed</option>
             <option value="reversed">Reversed</option>
@@ -937,6 +1017,7 @@ export default function TransactionsPage() {
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
                 >
                   <option value="pending">Pending</option>
+                  <option value="sent">Sent to MTN</option>
                   <option value="successful">Successful</option>
                   <option value="failed">Failed</option>
                 </select>
@@ -986,48 +1067,73 @@ export default function TransactionsPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-4xl max-h-[80vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">
-              Export Batch
+              Export Batch to MTN
             </h2>
             
             {/* Export Settings */}
             <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded mb-4">
-              <h3 className="font-semibold mb-3 text-gray-900 dark:text-white">Settings</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <h3 className="font-semibold mb-3 text-gray-900 dark:text-white">Export Settings</h3>
+              <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Order Status
+                    Order Status Filter
                   </label>
                   <select
                     value={exportSettings.status}
                     onChange={(e) => setExportSettings({
                       ...exportSettings,
                       status: e.target.value,
-                      markAsSuccessful: e.target.value === 'pending'
+                      markAsSent: false // Reset when changing filter
                     })}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   >
-                    <option value="pending">Pending</option>
-                    <option value="successful">Successful</option>
-                    <option value="failed">Failed</option>
+                    <option value="pending">Pending Orders</option>
+                    <option value="sent">Already Sent Orders</option>
+                    <option value="successful">Successful Orders</option>
+                    <option value="failed">Failed Orders</option>
                   </select>
                 </div>
                 
                 {exportSettings.status === 'pending' && (
-                  <div className="flex items-center">
-                    <label className="flex items-center space-x-2">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded p-3">
+                    <label className="flex items-start space-x-3">
                       <input
                         type="checkbox"
-                        checked={exportSettings.markAsSuccessful}
+                        checked={exportSettings.markAsSent}
                         onChange={(e) => setExportSettings({
                           ...exportSettings,
-                          markAsSuccessful: e.target.checked
+                          markAsSent: e.target.checked
                         })}
-                        className="rounded border-gray-300 dark:border-gray-600 text-blue-600"
+                        className="mt-1 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
                       />
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Mark as successful
-                      </span>
+                      <div>
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          Send to MTN for Processing
+                        </span>
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                          {exportSettings.markAsSent 
+                            ? "Orders will be marked as 'Sent' and automatically completed after 30 minutes"
+                            : "Export only - orders will remain as 'Pending' status"
+                          }
+                        </p>
+                      </div>
                     </label>
+                  </div>
+                )}
+                
+                {exportSettings.markAsSent && (
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded p-3">
+                    <div className="flex items-start">
+                      <ExclamationTriangleIcon className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 mr-2" />
+                      <div>
+                        <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                          Processing Notice
+                        </p>
+                        <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                          Orders will be sent to MTN and marked as "Sent". They will automatically update to "Successful" after approximately 30 minutes.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1038,6 +1144,30 @@ export default function TransactionsPage() {
               <h3 className="font-semibold mb-2 text-gray-900 dark:text-white">
                 Preview ({exportPreview.count} orders)
               </h3>
+              {exportPreview.impactSummary && (
+                <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded mb-3">
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600 dark:text-gray-400">Total Amount:</span>
+                      <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">
+                        {formatCurrency(exportPreview.impactSummary.totalAmount)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600 dark:text-gray-400">Processing Time:</span>
+                      <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">
+                        {exportPreview.impactSummary.estimatedProcessingTime} minutes
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600 dark:text-gray-400">Success Rate:</span>
+                      <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">
+                        {exportPreview.impactSummary.successRate}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="bg-gray-50 dark:bg-gray-900 rounded overflow-hidden">
                 <table className="min-w-full text-sm">
                   <thead className="bg-gray-100 dark:bg-gray-800">
@@ -1045,7 +1175,8 @@ export default function TransactionsPage() {
                       <th className="px-4 py-2 text-left">Transaction ID</th>
                       <th className="px-4 py-2 text-left">Beneficiary</th>
                       <th className="px-4 py-2 text-left">Capacity</th>
-                      <th className="px-4 py-2 text-left">Status</th>
+                      <th className="px-4 py-2 text-left">Current Status</th>
+                      <th className="px-4 py-2 text-left">New Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -1055,13 +1186,19 @@ export default function TransactionsPage() {
                         <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{item.beneficiaryNumber}</td>
                         <td className="px-4 py-2 text-gray-900 dark:text-gray-100">{item.capacity}</td>
                         <td className="px-4 py-2">{getStatusBadge(item.currentStatus)}</td>
+                        <td className="px-4 py-2">
+                          {exportSettings.markAsSent && item.currentStatus === 'pending' 
+                            ? getStatusBadge('sent')
+                            : getStatusBadge(item.currentStatus)
+                          }
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 {exportPreview.data.length > 5 && (
                   <div className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-center text-sm text-gray-600 dark:text-gray-400">
-                    ... and {exportPreview.data.length - 5} more
+                    ... and {exportPreview.data.length - 5} more orders
                   </div>
                 )}
               </div>
@@ -1072,7 +1209,8 @@ export default function TransactionsPage() {
                 onClick={handleExportPreview}
                 className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
               >
-                Refresh
+                <ArrowPathIcon className="h-4 w-4 inline mr-2" />
+                Refresh Preview
               </button>
               <div className="space-x-3">
                 <button
@@ -1086,12 +1224,12 @@ export default function TransactionsPage() {
                 </button>
                 <button
                   onClick={handleExportExcel}
-                  disabled={exportInProgress}
+                  disabled={exportInProgress || exportPreview.count === 0}
                   className={`px-4 py-2 rounded-md text-white ${
-                    exportInProgress
+                    exportInProgress || exportPreview.count === 0
                       ? 'bg-gray-400 cursor-not-allowed'
-                      : exportSettings.markAsSuccessful 
-                        ? 'bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600' 
+                      : exportSettings.markAsSent 
+                        ? 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600' 
                         : 'bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600'
                   }`}
                 >
@@ -1104,9 +1242,19 @@ export default function TransactionsPage() {
                       Exporting...
                     </span>
                   ) : (
-                    exportSettings.markAsSuccessful 
-                      ? 'Export & Process' 
-                      : 'Export Batch'
+                    <>
+                      {exportSettings.markAsSent ? (
+                        <>
+                          <PaperAirplaneIcon className="h-4 w-4 inline mr-2" />
+                          Export & Send to MTN
+                        </>
+                      ) : (
+                        <>
+                          <DocumentArrowDownIcon className="h-4 w-4 inline mr-2" />
+                          Export Only
+                        </>
+                      )}
+                    </>
                   )}
                 </button>
               </div>
@@ -1159,6 +1307,28 @@ export default function TransactionsPage() {
                       <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Phone</label>
                       <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
                         {selectedTransaction.user.phone}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {selectedTransaction.metadata?.exportId && (
+                <div className="border-t dark:border-gray-700 pt-4">
+                  <h3 className="font-semibold mb-2 text-gray-900 dark:text-white">Export Information</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Export ID</label>
+                      <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                        {selectedTransaction.metadata.exportId}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Estimated Completion</label>
+                      <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                        {selectedTransaction.metadata.estimatedCompletion 
+                          ? formatDate(selectedTransaction.metadata.estimatedCompletion)
+                          : 'N/A'}
                       </p>
                     </div>
                   </div>

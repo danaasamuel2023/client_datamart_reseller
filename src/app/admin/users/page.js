@@ -686,6 +686,376 @@ export default function UserManagementPage() {
           </div>
         </div>
 
+        {/* Create User Modal */}
+        {showCreateModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Create New User</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Full Name</label>
+                  <input
+                    type="text"
+                    value={createForm.fullName}
+                    onChange={(e) => setCreateForm({...createForm, fullName: e.target.value})}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+                  <input
+                    type="email"
+                    value={createForm.email}
+                    onChange={(e) => setCreateForm({...createForm, email: e.target.value})}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
+                  <input
+                    type="tel"
+                    value={createForm.phone}
+                    onChange={(e) => setCreateForm({...createForm, phone: e.target.value})}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
+                    placeholder="+233XXXXXXXXX"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
+                  <input
+                    type="password"
+                    value={createForm.password}
+                    onChange={(e) => setCreateForm({...createForm, password: e.target.value})}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Role</label>
+                  <select
+                    value={createForm.role}
+                    onChange={(e) => setCreateForm({...createForm, role: e.target.value})}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
+                  >
+                    <option value="agent">Agent</option>
+                    <option value="dealer">Dealer</option>
+                    <option value="supplier">Supplier</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
+                  <select
+                    value={createForm.status}
+                    onChange={(e) => setCreateForm({...createForm, status: e.target.value})}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
+                  >
+                    <option value="active">Active</option>
+                    <option value="pending">Pending</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateUser}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+                >
+                  Create User
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit User Modal */}
+        {showEditModal && selectedUser && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Edit User</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Full Name</label>
+                  <input
+                    type="text"
+                    value={editForm.fullName || ''}
+                    onChange={(e) => setEditForm({...editForm, fullName: e.target.value})}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
+                  <input
+                    type="email"
+                    value={editForm.email || ''}
+                    onChange={(e) => setEditForm({...editForm, email: e.target.value})}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
+                  <input
+                    type="tel"
+                    value={editForm.phone || ''}
+                    onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Role</label>
+                  <select
+                    value={editForm.role || ''}
+                    onChange={(e) => setEditForm({...editForm, role: e.target.value})}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
+                  >
+                    <option value="agent">Agent</option>
+                    <option value="dealer">Dealer</option>
+                    <option value="supplier">Supplier</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditForm({});
+                  }}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleEditUser}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Wallet Adjustment Modal */}
+        {showWalletModal && selectedUser && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white flex items-center">
+                <WalletIcon className="h-6 w-6 mr-2 text-purple-600 dark:text-purple-400" />
+                Adjust Wallet Balance
+              </h2>
+              <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                Current balance for {selectedUser.fullName}: <span className="font-bold text-gray-900 dark:text-white">GHS {selectedUser.wallet?.balance?.toFixed(2) || '0.00'}</span>
+              </p>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Amount</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={walletForm.amount}
+                    onChange={(e) => setWalletForm({...walletForm, amount: e.target.value})}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Type</label>
+                  <select
+                    value={walletForm.type}
+                    onChange={(e) => setWalletForm({...walletForm, type: e.target.value})}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
+                  >
+                    <option value="credit">Credit (Add)</option>
+                    <option value="debit">Debit (Subtract)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Reason</label>
+                  <textarea
+                    value={walletForm.reason}
+                    onChange={(e) => setWalletForm({...walletForm, reason: e.target.value})}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
+                    rows="3"
+                    placeholder="Enter reason for adjustment..."
+                  />
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowWalletModal(false);
+                    setWalletForm({ amount: '', type: 'credit', reason: '' });
+                  }}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleWalletAdjustment}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600"
+                >
+                  Adjust Balance
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Password Reset Modal */}
+        {showPasswordModal && selectedUser && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white flex items-center">
+                <LockClosedIcon className="h-6 w-6 mr-2 text-yellow-600 dark:text-yellow-400" />
+                Reset Password
+              </h2>
+              <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+                Reset password for: <span className="font-semibold text-gray-900 dark:text-white">{selectedUser.fullName}</span>
+              </p>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">New Password</label>
+                  <input
+                    type="password"
+                    value={passwordForm.newPassword}
+                    onChange={(e) => setPasswordForm({...passwordForm, newPassword: e.target.value})}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
+                    placeholder="Enter new password"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Confirm Password</label>
+                  <input
+                    type="password"
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) => setPasswordForm({...passwordForm, confirmPassword: e.target.value})}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
+                    placeholder="Confirm new password"
+                  />
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setShowPasswordModal(false);
+                    setPasswordForm({ newPassword: '', confirmPassword: '' });
+                  }}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePasswordReset}
+                  className="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 dark:bg-yellow-500 dark:hover:bg-yellow-600"
+                >
+                  Reset Password
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* User Details Modal */}
+        {showDetailsModal && selectedUser && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white flex items-center">
+                <UserGroupIcon className="h-6 w-6 mr-2 text-blue-600 dark:text-blue-400" />
+                User Details
+              </h2>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Full Name</label>
+                  <p className="mt-1 text-gray-900 dark:text-white">{selectedUser.fullName}</p>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">User ID</label>
+                  <p className="mt-1 text-gray-900 dark:text-white font-mono text-sm">{selectedUser._id}</p>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Email</label>
+                  <p className="mt-1 text-gray-900 dark:text-white">{selectedUser.email}</p>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Phone</label>
+                  <p className="mt-1 text-gray-900 dark:text-white">{selectedUser.phone}</p>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Role</label>
+                  <p className="mt-1">
+                    <span className={`px-2 py-1 text-xs rounded-full ${getRoleBadgeColor(selectedUser.role)}`}>
+                      {selectedUser.role.toUpperCase()}
+                    </span>
+                  </p>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Status</label>
+                  <p className="mt-1">
+                    <span className={`px-2 py-1 text-xs rounded-full ${getStatusBadgeColor(selectedUser.status)}`}>
+                      {selectedUser.status.toUpperCase()}
+                    </span>
+                  </p>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Wallet Balance</label>
+                  <p className="mt-1 text-gray-900 dark:text-white font-semibold">
+                    GHS {selectedUser.wallet?.balance?.toFixed(2) || '0.00'}
+                  </p>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Transactions</label>
+                  <p className="mt-1 text-gray-900 dark:text-white">
+                    {selectedUser.wallet?.totalTransactions || 0}
+                  </p>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">API Access</label>
+                  <p className="mt-1">
+                    {selectedUser.apiAccess?.enabled ? (
+                      <span className="flex items-center text-green-600 dark:text-green-400">
+                        <CheckCircleIcon className="h-4 w-4 mr-1" />
+                        Enabled
+                      </span>
+                    ) : (
+                      <span className="flex items-center text-gray-500 dark:text-gray-400">
+                        <XCircleIcon className="h-4 w-4 mr-1" />
+                        Disabled
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Last Login</label>
+                  <p className="mt-1 text-gray-900 dark:text-white">
+                    {selectedUser.lastLogin ? formatDate(selectedUser.lastLogin) : 'Never'}
+                  </p>
+                </div>
+                <div className="col-span-2">
+                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Account Created</label>
+                  <p className="mt-1 text-gray-900 dark:text-white">{formatDate(selectedUser.createdAt)}</p>
+                </div>
+                <div className="col-span-2">
+                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Last Updated</label>
+                  <p className="mt-1 text-gray-900 dark:text-white">{formatDate(selectedUser.updatedAt)}</p>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setShowDetailsModal(false)}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-600"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Generate API Key Modal */}
         {showApiKeyModal && selectedUser && (
           <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
@@ -823,94 +1193,6 @@ export default function UserManagementPage() {
           </div>
         )}
 
-        {/* Other existing modals (Create, Edit, Wallet, Password, Details) remain the same with dark mode classes applied */}
-        {/* I'll include just the Create User Modal as an example - others follow same pattern */}
-        
-        {/* Create User Modal */}
-        {showCreateModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-              <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">Create New User</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Full Name</label>
-                  <input
-                    type="text"
-                    value={createForm.fullName}
-                    onChange={(e) => setCreateForm({...createForm, fullName: e.target.value})}
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
-                  <input
-                    type="email"
-                    value={createForm.email}
-                    onChange={(e) => setCreateForm({...createForm, email: e.target.value})}
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label>
-                  <input
-                    type="tel"
-                    value={createForm.phone}
-                    onChange={(e) => setCreateForm({...createForm, phone: e.target.value})}
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
-                    placeholder="+233XXXXXXXXX"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
-                  <input
-                    type="password"
-                    value={createForm.password}
-                    onChange={(e) => setCreateForm({...createForm, password: e.target.value})}
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Role</label>
-                  <select
-                    value={createForm.role}
-                    onChange={(e) => setCreateForm({...createForm, role: e.target.value})}
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
-                  >
-                    <option value="agent">Agent</option>
-                    <option value="dealer">Dealer</option>
-                    <option value="supplier">Supplier</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
-                  <select
-                    value={createForm.status}
-                    onChange={(e) => setCreateForm({...createForm, status: e.target.value})}
-                    className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md"
-                  >
-                    <option value="active">Active</option>
-                    <option value="pending">Pending</option>
-                  </select>
-                </div>
-              </div>
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCreateUser}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-                >
-                  Create User
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
