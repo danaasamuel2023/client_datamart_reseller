@@ -16,7 +16,8 @@ import {
   DocumentArrowDownIcon,
   FolderIcon,
   InformationCircleIcon,
-  PaperAirplaneIcon
+  PaperAirplaneIcon,
+  DocumentDuplicateIcon
 } from '@heroicons/react/24/outline';
 
 export default function TransactionsPage() {
@@ -33,29 +34,38 @@ export default function TransactionsPage() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showReExportModal, setShowReExportModal] = useState(false);
   const [selectedTransactions, setSelectedTransactions] = useState([]);
   const [exportPreview, setExportPreview] = useState(null);
+  const [reExportPreview, setReExportPreview] = useState(null);
   const [exportInProgress, setExportInProgress] = useState(false);
   const [notification, setNotification] = useState(null);
   const [statusUpdateReason, setStatusUpdateReason] = useState('');
   const [bulkStatusUpdate, setBulkStatusUpdate] = useState({ status: '', reason: '' });
   const [showBulkStatusModal, setShowBulkStatusModal] = useState(false);
   const [exportStatus, setExportStatus] = useState(null);
+  const [exportHistory, setExportHistory] = useState([]);
+  const [selectedBatchForReExport, setSelectedBatchForReExport] = useState(null);
   const [exportSettings, setExportSettings] = useState({
     status: 'pending',
-    markAsSent: true // Changed to true by default for automatic sending to MTN
+    markAsSent: true
+  });
+  const [reExportSettings, setReExportSettings] = useState({
+    markAsSuccessful: true
   });
   const router = useRouter();
 
   useEffect(() => {
     fetchTransactions();
     fetchExportStatus();
+    fetchExportHistory();
   }, [currentPage, statusFilter, typeFilter, searchTerm, startDate, endDate]);
 
   useEffect(() => {
     // Refresh export status every 30 seconds
     const interval = setInterval(() => {
       fetchExportStatus();
+      fetchExportHistory();
     }, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -68,8 +78,8 @@ export default function TransactionsPage() {
       const params = new URLSearchParams({
         page: currentPage,
         limit: 40,
-        sort: 'createdAt', // Add sort field
-        order: 'asc', // Ascending order - oldest first for fair serving
+        sort: 'createdAt',
+        order: 'asc',
         ...(statusFilter && { status: statusFilter }),
         ...(typeFilter && { type: typeFilter }),
         ...(searchTerm && { search: searchTerm }),
@@ -110,6 +120,160 @@ export default function TransactionsPage() {
       }
     } catch (error) {
       console.error('Error fetching export status:', error);
+    }
+  };
+
+  const fetchExportHistory = async () => {
+    try {
+      const token = localStorage.getItem('Token');
+      const response = await fetch('https://server-datamart-reseller.onrender.com/api/admin/export-history?limit=5', {
+        headers: { 'x-auth-token': token }
+      });
+      const data = await response.json();
+      if (data.success) {
+        setExportHistory(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching export history:', error);
+    }
+  };
+
+  const handleReExportPreview = async (exportId) => {
+    try {
+      const token = localStorage.getItem('Token');
+      
+      // Find the batch ID from export history
+      const exportItem = exportHistory.find(e => e.exportId === exportId);
+      if (!exportItem) {
+        setNotification({
+          type: 'error',
+          title: 'Export Not Found',
+          message: 'Could not find the export for re-export'
+        });
+        return;
+      }
+      
+      const batchId = `BATCH-${exportId}`;
+      
+      const response = await fetch(
+        `https://server-datamart-reseller.onrender.com/api/admin/batches/${batchId}/re-export-preview`,
+        { headers: { 'x-auth-token': token } }
+      );
+      
+      const data = await response.json();
+      if (data.success) {
+        setReExportPreview(data.data);
+        setSelectedBatchForReExport(batchId);
+        setShowReExportModal(true);
+      } else {
+        setNotification({
+          type: 'error',
+          title: 'Preview Failed',
+          message: data.message || 'Error previewing re-export'
+        });
+      }
+    } catch (error) {
+      console.error('Error previewing re-export:', error);
+      setNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to preview re-export'
+      });
+    }
+  };
+
+  const handleReExport = async () => {
+    try {
+      if (!selectedBatchForReExport) {
+        setNotification({
+          type: 'error',
+          title: 'No Batch Selected',
+          message: 'Please select a batch to re-export'
+        });
+        return;
+      }
+
+      setExportInProgress(true);
+      const token = localStorage.getItem('Token');
+      
+      const response = await fetch(
+        `https://server-datamart-reseller.onrender.com/api/admin/batches/${selectedBatchForReExport}/re-export`,
+        {
+          method: 'POST',
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ 
+            markAsSuccessful: reExportSettings.markAsSuccessful
+          })
+        }
+      );
+      
+      const contentType = response.headers.get('content-type');
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        setExportInProgress(false);
+        setNotification({
+          type: 'error',
+          title: 'Re-Export Failed',
+          message: errorData.message || 'Error re-exporting batch'
+        });
+        setShowReExportModal(false);
+        return;
+      }
+      
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        if (!data.success) {
+          setExportInProgress(false);
+          setNotification({
+            type: 'error',
+            title: 'Re-Export Failed',
+            message: data.message || 'Error re-exporting batch'
+          });
+          setShowReExportModal(false);
+          return;
+        }
+      } else {
+        // Handle Excel download
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const exportId = response.headers.get('X-Export-ID') || 'reexport';
+        
+        a.href = url;
+        a.download = `MTN_re-export_${exportId}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        setShowReExportModal(false);
+        setExportInProgress(false);
+        setReExportPreview(null);
+        setSelectedBatchForReExport(null);
+        
+        setNotification({
+          type: 'success',
+          title: 'Re-Export Successful',
+          message: `Batch re-exported with ID: ${exportId}. ${reExportSettings.markAsSuccessful ? 'Orders sent to MTN for processing.' : 'Export only.'}`
+        });
+        
+        fetchTransactions();
+        fetchExportStatus();
+        fetchExportHistory();
+      }
+    } catch (error) {
+      console.error('Re-export error:', error);
+      setExportInProgress(false);
+      setShowReExportModal(false);
+      setNotification({
+        type: 'error',
+        title: 'Re-Export Error',
+        message: error.message
+      });
     }
   };
 
@@ -258,7 +422,7 @@ export default function TransactionsPage() {
       
       const requestBody = {
         status: exportSettings.status,
-        markAsSuccessful: exportSettings.markAsSent, // This will mark as "sent" in new system
+        markAsSuccessful: exportSettings.markAsSent,
         confirmExport: true,
         ...(startDate && { startDate }),
         ...(endDate && { endDate })
@@ -313,15 +477,13 @@ export default function TransactionsPage() {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
         
-        // Reset export settings keeping markAsSent as true
         setExportSettings({
           status: 'pending',
-          markAsSent: true // Keep as true by default
+          markAsSent: true
         });
         setShowExportModal(false);
         setExportInProgress(false);
         
-        // Show appropriate notification based on action
         if (exportSettings.markAsSent) {
           setNotification({
             type: 'info',
@@ -338,6 +500,7 @@ export default function TransactionsPage() {
         
         fetchTransactions();
         fetchExportStatus();
+        fetchExportHistory();
       }
     } catch (error) {
       console.error('Error exporting batch:', error);
@@ -507,7 +670,8 @@ export default function TransactionsPage() {
       sent: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
       processing: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
       failed: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-      reversed: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+      reversed: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+      're-exported': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
     };
 
     const statusIcons = {
@@ -515,7 +679,8 @@ export default function TransactionsPage() {
       pending: <ClockIcon className="h-4 w-4 inline mr-1" />,
       sent: <PaperAirplaneIcon className="h-4 w-4 inline mr-1" />,
       processing: <ArrowPathIcon className="h-4 w-4 inline mr-1" />,
-      failed: <XCircleIcon className="h-4 w-4 inline mr-1" />
+      failed: <XCircleIcon className="h-4 w-4 inline mr-1" />,
+      're-exported': <DocumentDuplicateIcon className="h-4 w-4 inline mr-1" />
     };
 
     return (
@@ -543,9 +708,9 @@ export default function TransactionsPage() {
     }
   };
 
-  // Export Status Bar Component
+  // Export Status Bar Component - Updated with Export History
   const ExportStatusBar = () => {
-    if (!exportStatus?.lastExport) return null;
+    if (!exportStatus?.lastExport && exportHistory.length === 0) return null;
     
     return (
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 mb-4">
@@ -553,8 +718,8 @@ export default function TransactionsPage() {
           <div className="flex items-center">
             <InformationCircleIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-2 flex-shrink-0" />
             <div className="text-sm text-blue-900 dark:text-blue-100">
-              <span className="font-medium">Last Export:</span> {exportStatus.lastExportDisplay}
-              {exportStatus.lastExport?.status && (
+              <span className="font-medium">Last Export:</span> {exportStatus?.lastExportDisplay || 'No exports yet'}
+              {exportStatus?.lastExport?.status && (
                 <span className="ml-2">
                   Status: <span className={`font-medium ${
                     exportStatus.lastExport.status === 'completed' ? 'text-green-700 dark:text-green-400' : 
@@ -565,7 +730,7 @@ export default function TransactionsPage() {
               )}
             </div>
           </div>
-          {exportStatus.currentProcessing?.isProcessing && (
+          {exportStatus?.currentProcessing?.isProcessing && (
             <span className="text-xs bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200 px-2 py-1 rounded flex items-center">
               <ArrowPathIcon className="h-3 w-3 mr-1 animate-spin" />
               Processing {exportStatus.currentProcessing.activeExports?.length || 0} export(s)
@@ -573,11 +738,36 @@ export default function TransactionsPage() {
           )}
         </div>
         
-        {/* Add Fair Serving Notice */}
         <div className="mt-2 text-xs text-blue-700 dark:text-blue-300">
           <InformationCircleIcon className="h-3 w-3 inline mr-1" />
           Orders are displayed oldest first to ensure fair serving (FIFO)
         </div>
+        
+        {/* Recent Export History */}
+        {exportHistory.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-700">
+            <div className="text-xs text-blue-800 dark:text-blue-200 font-medium mb-2">Recent Exports:</div>
+            <div className="space-y-1">
+              {exportHistory.slice(0, 3).map(exp => (
+                <div key={exp.exportId} className="flex items-center justify-between text-xs">
+                  <div className="text-blue-700 dark:text-blue-300">
+                    {exp.exportId} - {exp.exportDetails.totalOrders} orders
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {getStatusBadge(exp.status.current)}
+                    <button
+                      onClick={() => handleReExportPreview(exp.exportId)}
+                      className="text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300"
+                      title="Re-export"
+                    >
+                      <DocumentDuplicateIcon className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -588,7 +778,7 @@ export default function TransactionsPage() {
       if (notification) {
         const timer = setTimeout(() => {
           setNotification(null);
-        }, 5000); // 5 seconds for better readability
+        }, 5000);
         return () => clearTimeout(timer);
       }
     }, [notification]);
@@ -722,6 +912,163 @@ export default function TransactionsPage() {
     </>
   );
 
+  // Re-Export Modal Component
+  const ReExportModal = () => (
+    <>
+      {showReExportModal && reExportPreview && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-4xl max-h-[80vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-white">
+              Re-Export Batch to MTN
+            </h2>
+            
+            {/* Re-Export Info */}
+            <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded mb-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-600 dark:text-gray-400">Batch ID:</span>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{reExportPreview.batchId}</p>
+                </div>
+                <div>
+                  <span className="text-gray-600 dark:text-gray-400">Original Export:</span>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{formatDate(reExportPreview.originalExportDate)}</p>
+                </div>
+                <div>
+                  <span className="text-gray-600 dark:text-gray-400">Valid Orders:</span>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{reExportPreview.validOrders}</p>
+                </div>
+                <div>
+                  <span className="text-gray-600 dark:text-gray-400">Total Amount:</span>
+                  <p className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(reExportPreview.totalAmount)}</p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Re-Export Settings */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded p-4 mb-4">
+              <label className="flex items-start space-x-3">
+                <input
+                  type="checkbox"
+                  checked={reExportSettings.markAsSuccessful}
+                  onChange={(e) => setReExportSettings({
+                    ...reExportSettings,
+                    markAsSuccessful: e.target.checked
+                  })}
+                  className="mt-1 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    Send to MTN for Processing
+                  </span>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                    {reExportSettings.markAsSuccessful 
+                      ? "Orders will be marked as 'Sent' and automatically completed after 30 minutes"
+                      : "Re-export only - orders will keep their current status"
+                    }
+                  </p>
+                </div>
+              </label>
+            </div>
+            
+            {/* Preview Orders (Number and Capacity only) */}
+            <div>
+              <h3 className="font-semibold mb-2 text-gray-900 dark:text-white">
+                Preview Orders (First 10)
+              </h3>
+              <div className="bg-gray-50 dark:bg-gray-900 rounded overflow-hidden">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-100 dark:bg-gray-800">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Number</th>
+                      <th className="px-4 py-2 text-left">Capacity</th>
+                      <th className="px-4 py-2 text-left">Transaction ID</th>
+                      <th className="px-4 py-2 text-left">Current Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {reExportPreview.orders?.map((order, idx) => (
+                      <tr key={idx}>
+                        <td className="px-4 py-2 text-gray-900 dark:text-gray-100 font-medium">
+                          {order.beneficiaryNumber}
+                        </td>
+                        <td className="px-4 py-2 text-gray-900 dark:text-gray-100 font-medium">
+                          {order.capacity}
+                        </td>
+                        <td className="px-4 py-2 text-gray-600 dark:text-gray-400 text-xs">
+                          {order.transactionId}
+                        </td>
+                        <td className="px-4 py-2">
+                          {getStatusBadge(order.status)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {reExportPreview.validOrders > 10 && (
+                  <div className="px-4 py-2 bg-gray-100 dark:bg-gray-800 text-center text-sm text-gray-600 dark:text-gray-400">
+                    ... and {reExportPreview.validOrders - 10} more orders
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Excel Format Notice */}
+            <div className="mt-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded p-3">
+              <div className="flex items-start">
+                <InformationCircleIcon className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 mr-2" />
+                <div>
+                  <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                    Excel Format
+                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                    The Excel file will contain only two columns: Number and Capacity. This matches the format required by MTN.
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowReExportModal(false);
+                  setReExportPreview(null);
+                  setSelectedBatchForReExport(null);
+                }}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReExport}
+                disabled={exportInProgress || !reExportPreview?.validOrders}
+                className={`px-4 py-2 rounded-md text-white ${
+                  exportInProgress || !reExportPreview?.validOrders
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-purple-600 hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600'
+                }`}
+              >
+                {exportInProgress ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Re-Exporting...
+                  </span>
+                ) : (
+                  <>
+                    <DocumentDuplicateIcon className="h-4 w-4 inline mr-2" />
+                    Re-Export {reExportSettings.markAsSuccessful ? '& Send to MTN' : 'Only'}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div className="space-y-6">
       {/* Notification Toast */}
@@ -769,7 +1116,7 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* Export Status Bar */}
+      {/* Export Status Bar - Updated */}
       <ExportStatusBar />
 
       {/* Filters */}
@@ -827,7 +1174,7 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* Transactions Table */}
+      {/* Transactions Table (same as before) */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -991,12 +1338,15 @@ export default function TransactionsPage() {
         )}
       </div>
 
-      {/* Modals */}
+      {/* All Modals */}
       
       {/* Bulk Status Update Modal */}
       <BulkStatusUpdateModal />
+      
+      {/* Re-Export Modal */}
+      <ReExportModal />
 
-      {/* Status Update Modal */}
+      {/* Status Update Modal (same as before) */}
       {showStatusModal && selectedTransaction && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
@@ -1071,7 +1421,7 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* Export Batch Modal */}
+      {/* Export Batch Modal (same as before) */}
       {showExportModal && exportPreview && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-4xl max-h-[80vh] overflow-y-auto">
@@ -1092,7 +1442,7 @@ export default function TransactionsPage() {
                     onChange={(e) => setExportSettings({
                       ...exportSettings,
                       status: e.target.value,
-                      markAsSent: e.target.value === 'pending' // Auto-enable for pending orders
+                      markAsSent: e.target.value === 'pending'
                     })}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   >
@@ -1272,7 +1622,7 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* Transaction Details Modal */}
+      {/* Transaction Details Modal (same as before) */}
       {showDetailsModal && selectedTransaction && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
