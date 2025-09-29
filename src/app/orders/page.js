@@ -397,8 +397,19 @@ export default function TransactionHistory() {
                   <li>• You will receive a notification when the retry is successful</li>
                   <li>• If all retries fail, your money will be refunded to your wallet</li>
                 </ul>
+                
+                <div className="mt-3 p-2 bg-yellow-900/30 border border-yellow-500/50 rounded">
+                  <p className="text-yellow-400 text-sm font-semibold mb-1">💰 Insufficient Balance Notice:</p>
+                  <ul className="space-y-1 text-gray-300 text-xs">
+                    <li>• If your wallet balance is insufficient, the retry will be <strong>skipped</strong></li>
+                    <li>• The order will remain in "failed" status until you add funds</li>
+                    <li>• System will retry once you top up your wallet with sufficient funds</li>
+                    <li>• Keep extra balance in your wallet to ensure automatic retries work</li>
+                  </ul>
+                </div>
+                
                 <p className="text-yellow-400 text-sm mt-2 font-medium">
-                  Placing duplicate orders will result in double charges!
+                  ⚠️ Placing duplicate orders will result in double charges!
                 </p>
               </div>
             </div>
@@ -455,7 +466,9 @@ export default function TransactionHistory() {
                         <p className="text-gray-300 text-sm">Transaction failed - amount has been refunded to your wallet</p>
                         <div className="mt-2 p-2 bg-red-900/20 border border-red-500/30 rounded">
                           <p className="text-red-400 text-xs font-semibold mb-1">⚠️ IMPORTANT: DO NOT REORDER!</p>
-                          <p className="text-gray-300 text-xs">System automatically retries failed orders. When retrying, money will be deducted from your wallet.</p>
+                          <p className="text-gray-300 text-xs">System automatically retries failed orders.</p>
+                          <p className="text-yellow-400 text-xs mt-1">💰 Note: Retries require sufficient wallet balance.</p>
+                          <p className="text-gray-400 text-xs">If balance is low, retry will wait until you top up.</p>
                         </div>
                       </div>
                     </div>
@@ -463,12 +476,17 @@ export default function TransactionHistory() {
                 )}
                 
                 {!showStatusInfo && (
-                  <div className="flex gap-4 text-xs">
-                    <span className="text-yellow-400">⚡ Pending = Queue</span>
-                    <span className="text-blue-400">📤 Sent = Processing at MTN</span>
-                    <span className="text-green-400">✓ Successful = Delivered</span>
-                    <span className="text-red-400">⚠️ Failed = Auto-retry active</span>
-                    <span className="text-gray-400 ml-auto">Click ⓘ for details</span>
+                  <div className="space-y-1">
+                    <div className="flex gap-4 text-xs">
+                      <span className="text-yellow-400">⚡ Pending = Queue</span>
+                      <span className="text-blue-400">📤 Sent = Processing at MTN</span>
+                      <span className="text-green-400">✓ Successful = Delivered</span>
+                      <span className="text-red-400">⚠️ Failed = Auto-retry (needs funds)</span>
+                      <span className="text-gray-400 ml-auto">Click ⓘ for details</span>
+                    </div>
+                    <div className="text-xs text-yellow-400 font-medium">
+                      💰 Maintain wallet balance for automatic retries to work
+                    </div>
                   </div>
                 )}
               </div>
@@ -524,7 +542,9 @@ export default function TransactionHistory() {
                   <X className="w-4 h-4 text-red-400" />
                 </div>
                 <p className="text-2xl font-bold text-white">{stats.failedOrders}</p>
-                <p className="text-xs text-gray-500 mt-1">Auto-retrying</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {stats.failedOrders > 0 ? 'Check wallet balance' : 'Auto-retrying'}
+                </p>
                 {stats.failedOrders > 0 && (
                   <div className="absolute -top-1 -right-1">
                     <span className="flex h-3 w-3">
@@ -810,6 +830,7 @@ export default function TransactionHistory() {
                   <div className="mb-2 p-2 bg-red-900/20 border border-red-500/30 rounded text-xs">
                     <p className="text-red-400 font-medium">⚠️ DO NOT REORDER</p>
                     <p className="text-gray-300">Auto-retry in progress</p>
+                    <p className="text-yellow-400 mt-1">💰 Needs sufficient wallet balance</p>
                   </div>
                 )}
                 
