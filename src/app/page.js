@@ -1,4 +1,4 @@
-// app/page.jsx - DATAMART ENHANCED WITH API DOCUMENTATION NAVIGATION
+// app/page.jsx - DATAMART ENHANCED WITH SMART BULK DETECTION
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -45,7 +45,7 @@ import {
   EyeOff,
   Trash2,
   Edit2,
-  Terminal // Added Terminal icon for API Docs
+  Terminal
 } from 'lucide-react';
 
 // API Base URL
@@ -79,9 +79,9 @@ export default function DataMartMainPage() {
   const [bulkErrors, setBulkErrors] = useState([]);
   const [bulkParseProgress, setBulkParseProgress] = useState('');
   const [manualBulkInput, setManualBulkInput] = useState('');
-  const [bulkInputMode, setBulkInputMode] = useState('file'); // 'file' or 'manual'
+  const [bulkInputMode, setBulkInputMode] = useState('file');
   const [showPreview, setShowPreview] = useState(true);
-  const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'valid', 'invalid'
+  const [filterStatus, setFilterStatus] = useState('all');
   const [bulkSummary, setBulkSummary] = useState({
     total: 0,
     valid: 0,
@@ -106,7 +106,6 @@ export default function DataMartMainPage() {
         return;
       }
 
-      // Verify token with backend
       const response = await fetch(`${API_BASE_URL}/auth/verify-token`, {
         method: 'POST',
         headers: {
@@ -162,7 +161,6 @@ export default function DataMartMainPage() {
     }
   };
 
-  // Fetch products after authentication
   useEffect(() => {
     if (isAuthenticated) {
       fetchProducts();
@@ -182,7 +180,6 @@ export default function DataMartMainPage() {
         return;
       }
       
-      // Fetch actual products from API
       const response = await fetch(`${API_BASE_URL}/purchase/products`, {
         method: 'GET',
         headers: {
@@ -203,15 +200,14 @@ export default function DataMartMainPage() {
       const data = await response.json();
       
       if (data.success && data.data) {
-        // Transform the API data to match UI structure
         const transformedProducts = data.data.map(product => ({
           id: product._id,
           productCode: product.productCode,
           name: product.name,
           capacity: product.capacity ? 
-            `${product.capacity.value}${product.capacity.unit}` : // Show value with unit (e.g., "1GB", "500MB")
+            `${product.capacity.value}${product.capacity.unit}` :
             'N/A',
-          capacityValue: product.capacity?.value || 0, // Store numeric value for matching
+          capacityValue: product.capacity?.value || 0,
           capacityUnit: product.capacity?.unit || 'GB',
           price: product.price || product.userPrice || 0,
           validity: product.validity ? 
@@ -250,7 +246,6 @@ export default function DataMartMainPage() {
     router.push('/auth/login');
   };
 
-  // Show loading screen while checking authentication
   if (authLoading) {
     return (
       <div className="min-h-screen bg-[#2a2d3a] flex items-center justify-center">
@@ -267,7 +262,6 @@ export default function DataMartMainPage() {
     return null;
   }
 
-  // Handlers
   const handleProductSelect = (product) => {
     if (purchaseMode === 'single') {
       setSelectedProduct(product);
@@ -279,12 +273,10 @@ export default function DataMartMainPage() {
     }
   };
 
-  // Format phone number helper
   const formatPhoneNumber = (phone) => {
     if (!phone) return '';
     let cleaned = String(phone).replace(/\D/g, '');
     
-    // Handle different formats
     if (cleaned.startsWith('233')) {
       cleaned = '0' + cleaned.substring(3);
     } else if (cleaned.length === 9 && !cleaned.startsWith('0')) {
@@ -300,7 +292,6 @@ export default function DataMartMainPage() {
     return phoneRegex.test(formatted);
   };
 
-  // Parse capacity value helper
   const parseCapacityValue = (value) => {
     if (!value) return null;
     
@@ -313,15 +304,14 @@ export default function DataMartMainPage() {
     if (strValue.includes('mb') || strValue.includes('megabyte')) {
       const mbValue = parseFloat(cleanValue);
       if (!isNaN(mbValue)) {
-        // Convert MB to value that matches product (500MB = 500 in products)
         return mbValue;
       }
     }
     
-    // Parse as GB
-    const gbValue = parseFloat(cleanValue);
-    if (!isNaN(gbValue) && gbValue > 0 && gbValue <= 1000) {
-      return gbValue;
+    // Parse as number
+    const numValue = parseFloat(cleanValue);
+    if (!isNaN(numValue) && numValue > 0 && numValue <= 1000) {
+      return numValue;
     }
     
     return null;
@@ -425,7 +415,6 @@ export default function DataMartMainPage() {
     }
   };
 
-  // ENHANCED FILE UPLOAD WITH PROPER EXCEL PARSING
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -448,7 +437,6 @@ export default function DataMartMainPage() {
     }
   };
 
-  // Parse Excel file with XLSX
   const parseExcelFile = async (file) => {
     try {
       setBulkParseProgress('Parsing Excel file...');
@@ -459,11 +447,9 @@ export default function DataMartMainPage() {
           const data = new Uint8Array(e.target.result);
           const workbook = XLSX.read(data, { type: 'array', cellDates: true });
           
-          // Get first sheet
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
           
-          // Convert to JSON with header
           const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
           
           if (jsonData.length < 2) {
@@ -472,7 +458,6 @@ export default function DataMartMainPage() {
             return;
           }
           
-          // Process data
           processFileData(jsonData);
           
         } catch (error) {
@@ -494,7 +479,6 @@ export default function DataMartMainPage() {
     }
   };
 
-  // Parse CSV file
   const parseCSVFile = async (file) => {
     try {
       setBulkParseProgress('Parsing CSV file...');
@@ -510,7 +494,6 @@ export default function DataMartMainPage() {
           return;
         }
         
-        // Convert CSV to 2D array format like Excel
         const data = lines.map(line => line.split(',').map(cell => cell.trim()));
         processFileData(data);
       };
@@ -528,99 +511,215 @@ export default function DataMartMainPage() {
     }
   };
 
-  // Process file data (both Excel and CSV)
+  // ENHANCED PROCESS FILE DATA WITH SMART DETECTION
   const processFileData = (data) => {
     const orders = [];
     const errors = [];
     
-    // Get headers (first row)
-    const headers = data[0].map(h => String(h).toLowerCase().trim());
+    // Helper function to detect if a value looks like a phone number
+    const looksLikePhoneNumber = (value) => {
+      if (!value) return false;
+      const cleaned = String(value).replace(/\D/g, '');
+      // Check if it's 9 or 10 digits (Ghana phone numbers)
+      return cleaned.length === 9 || cleaned.length === 10;
+    };
     
-    // Find column indices
-    let phoneColumnIndex = headers.findIndex(h => 
-      h.includes('number') || h.includes('phone') || h.includes('beneficiary') || h.includes('mobile')
-    );
-    let capacityColumnIndex = headers.findIndex(h => 
-      h.includes('capacity') || h.includes('data') || h.includes('gb') || h.includes('bundle')
-    );
+    // Helper function to detect if a value looks like a capacity
+    const looksLikeCapacity = (value) => {
+      if (!value) return false;
+      const strValue = String(value).trim();
+      const numValue = parseFloat(strValue.replace(/[^\d.]/g, ''));
+      if (isNaN(numValue)) return false;
+      
+      // Common data capacities
+      const commonCapacities = [0.5, 1, 2, 3, 4, 5, 10, 15, 20, 25, 30, 50, 100, 200, 500, 1000];
+      return commonCapacities.includes(numValue);
+    };
     
-    if (phoneColumnIndex === -1 || capacityColumnIndex === -1) {
-      setError('Invalid file format. Required columns: phone/number and capacity/data');
+    // Function to intelligently detect columns
+    const detectColumns = () => {
+      let phoneColumnIndex = -1;
+      let capacityColumnIndex = -1;
+      
+      // First try to find by headers
+      const headers = data[0].map(h => String(h).toLowerCase().trim());
+      
+      phoneColumnIndex = headers.findIndex(h => 
+        h.includes('number') || h.includes('phone') || h.includes('beneficiary') || 
+        h.includes('mobile') || h.includes('msisdn') || h.includes('contact')
+      );
+      
+      capacityColumnIndex = headers.findIndex(h => 
+        h.includes('capacity') || h.includes('data') || h.includes('gb') || 
+        h.includes('bundle') || h.includes('size') || h.includes('megabyte') || h.includes('mb')
+      );
+      
+      // If headers don't work, analyze the data in the first few rows
+      if (phoneColumnIndex === -1 || capacityColumnIndex === -1) {
+        setBulkParseProgress('Auto-detecting columns...');
+        
+        // Check first 5 data rows to identify patterns
+        const sampleRows = Math.min(5, data.length - 1);
+        const columnScores = {};
+        
+        for (let col = 0; col < (data[1] ? data[1].length : 0); col++) {
+          let phoneScore = 0;
+          let capacityScore = 0;
+          
+          for (let row = 1; row <= sampleRows; row++) {
+            if (data[row] && data[row][col]) {
+              const value = data[row][col];
+              
+              if (looksLikePhoneNumber(value)) {
+                phoneScore++;
+              }
+              
+              if (looksLikeCapacity(value)) {
+                capacityScore++;
+              }
+            }
+          }
+          
+          columnScores[col] = { phone: phoneScore, capacity: capacityScore };
+        }
+        
+        // Find best matching columns
+        if (phoneColumnIndex === -1) {
+          let maxPhoneScore = 0;
+          for (const [col, scores] of Object.entries(columnScores)) {
+            if (scores.phone > maxPhoneScore) {
+              maxPhoneScore = scores.phone;
+              phoneColumnIndex = parseInt(col);
+            }
+          }
+        }
+        
+        if (capacityColumnIndex === -1) {
+          let maxCapacityScore = 0;
+          for (const [col, scores] of Object.entries(columnScores)) {
+            // Don't use the same column as phone
+            if (parseInt(col) !== phoneColumnIndex && scores.capacity > maxCapacityScore) {
+              maxCapacityScore = scores.capacity;
+              capacityColumnIndex = parseInt(col);
+            }
+          }
+        }
+      }
+      
+      return { phoneColumnIndex, capacityColumnIndex };
+    };
+    
+    // Detect columns
+    const { phoneColumnIndex, capacityColumnIndex } = detectColumns();
+    
+    if (phoneColumnIndex === -1 && capacityColumnIndex === -1) {
+      // If we still can't detect, try assuming first two columns
+      setBulkParseProgress('Using default column positions...');
+      
+      // Check which column looks more like phone in first two columns
+      if (data[1] && data[1].length >= 2) {
+        const firstColLooksLikePhone = looksLikePhoneNumber(data[1][0]);
+        const secondColLooksLikePhone = looksLikePhoneNumber(data[1][1]);
+        
+        if (firstColLooksLikePhone && !secondColLooksLikePhone) {
+          // First column is phone, second is capacity
+          processWithColumns(0, 1);
+        } else if (!firstColLooksLikePhone && secondColLooksLikePhone) {
+          // First column is capacity, second is phone
+          processWithColumns(1, 0);
+        } else {
+          // Default assumption: first is phone, second is capacity
+          processWithColumns(0, 1);
+        }
+      } else {
+        setError('Cannot detect data columns. Please ensure file has phone numbers and capacity values.');
+        setBulkParseProgress('');
+        return;
+      }
+    } else if (phoneColumnIndex === -1 || capacityColumnIndex === -1) {
+      setError('Could not detect both phone number and capacity columns. Please check your file format.');
       setBulkParseProgress('');
       return;
+    } else {
+      processWithColumns(phoneColumnIndex, capacityColumnIndex);
     }
     
-    // Process rows (skip header, max 100 rows)
-    const maxRows = Math.min(data.length - 1, 100);
-    
-    for (let i = 1; i <= maxRows; i++) {
-      const row = data[i];
-      if (!row || row.every(cell => !cell)) continue; // Skip empty rows
+    // Process data with detected columns
+    function processWithColumns(phoneCol, capacityCol) {
+      setBulkParseProgress('Processing rows...');
       
-      const phoneValue = row[phoneColumnIndex] || '';
-      const capacityValue = row[capacityColumnIndex] || '';
+      // Process rows (skip header if it looks like headers, max 100 rows)
+      const startRow = (data[0] && !looksLikePhoneNumber(data[0][phoneCol]) && !looksLikeCapacity(data[0][capacityCol])) ? 1 : 0;
+      const maxRows = Math.min(data.length - startRow, 100);
       
-      // Format and validate phone
-      const formattedPhone = formatPhoneNumber(phoneValue);
-      const isValidPhone = validatePhoneNumber(formattedPhone);
-      
-      // Parse capacity
-      const parsedCapacity = parseCapacityValue(capacityValue);
-      
-      // Find matching product
-      let product = null;
-      if (parsedCapacity !== null) {
-        // Try to match by capacity value
-        product = products.find(p => {
-          // Handle MB products (500MB)
-          if (p.capacityUnit === 'MB' && parsedCapacity === 500) {
-            return p.capacityValue === 500;
-          }
-          // Handle GB products
-          return p.capacityValue === parsedCapacity;
+      for (let i = 0; i < maxRows; i++) {
+        const rowIndex = startRow + i;
+        const row = data[rowIndex];
+        
+        if (!row || row.every(cell => !cell)) continue;
+        
+        const phoneValue = row[phoneCol] || '';
+        const capacityValue = row[capacityCol] || '';
+        
+        // Skip if both values are empty
+        if (!phoneValue && !capacityValue) continue;
+        
+        const formattedPhone = formatPhoneNumber(phoneValue);
+        const isValidPhone = validatePhoneNumber(formattedPhone);
+        
+        const parsedCapacity = parseCapacityValue(capacityValue);
+        
+        // Find matching product
+        let product = null;
+        if (parsedCapacity !== null) {
+          product = products.find(p => {
+            if (p.capacityUnit === 'MB' && parsedCapacity === 500) {
+              return p.capacityValue === 500;
+            }
+            return p.capacityValue === parsedCapacity;
+          });
+        }
+        
+        const rowErrors = [];
+        if (!phoneValue) {
+          rowErrors.push('Missing phone number');
+        } else if (!isValidPhone) {
+          rowErrors.push(`Invalid phone: ${phoneValue}`);
+        }
+        
+        if (!capacityValue) {
+          rowErrors.push('Missing capacity');
+        } else if (parsedCapacity === null) {
+          rowErrors.push(`Invalid capacity: ${capacityValue}`);
+        } else if (!product) {
+          rowErrors.push(`No product for ${parsedCapacity}${parsedCapacity === 500 ? 'MB' : 'GB'}`);
+        }
+        
+        orders.push({
+          row: rowIndex + 1,
+          originalPhone: phoneValue,
+          formattedPhone: formattedPhone,
+          originalCapacity: capacityValue,
+          parsedCapacity: parsedCapacity,
+          productId: product?.id || null,
+          productCode: product?.productCode || '',
+          productName: product?.name || 'Not Found',
+          capacity: product?.capacity || '-',
+          beneficiary: formattedPhone,
+          price: product?.price || 0,
+          isValid: isValidPhone && product !== null,
+          errors: rowErrors,
+          status: 'pending'
         });
+        
+        if (rowErrors.length > 0) {
+          errors.push(`Row ${rowIndex + 1}: ${rowErrors.join(', ')}`);
+        }
       }
       
-      // Build error messages
-      const rowErrors = [];
-      if (!phoneValue) {
-        rowErrors.push('Missing phone number');
-      } else if (!isValidPhone) {
-        rowErrors.push(`Invalid phone: ${phoneValue}`);
+      if (data.length - startRow > 100) {
+        errors.push(`Note: Only first 100 rows processed (file has ${data.length - startRow} data rows)`);
       }
-      
-      if (!capacityValue) {
-        rowErrors.push('Missing capacity');
-      } else if (parsedCapacity === null) {
-        rowErrors.push(`Invalid capacity: ${capacityValue}`);
-      } else if (!product) {
-        rowErrors.push(`No product for ${parsedCapacity}${parsedCapacity === 500 ? 'MB' : 'GB'}`);
-      }
-      
-      orders.push({
-        row: i,
-        originalPhone: phoneValue,
-        formattedPhone: formattedPhone,
-        originalCapacity: capacityValue,
-        parsedCapacity: parsedCapacity,
-        productId: product?.id || null,
-        productCode: product?.productCode || '',
-        productName: product?.name || 'Not Found',
-        capacity: product?.capacity || '-',
-        beneficiary: formattedPhone,
-        price: product?.price || 0,
-        isValid: isValidPhone && product !== null,
-        errors: rowErrors,
-        status: 'pending'
-      });
-      
-      if (rowErrors.length > 0) {
-        errors.push(`Row ${i}: ${rowErrors.join(', ')}`);
-      }
-    }
-    
-    if (data.length > 101) {
-      errors.push(`Note: Only first 100 rows processed (file has ${data.length - 1} rows)`);
     }
     
     // Update state
@@ -637,11 +736,14 @@ export default function DataMartMainPage() {
       totalCost: validOrders.reduce((sum, o) => sum + o.price, 0)
     });
     
-    // Show success message
+    // Show results message
     if (validOrders.length > 0) {
       setSuccess(`Loaded ${validOrders.length} valid orders from ${orders.length} rows`);
+      if (phoneColumnIndex === -1 || capacityColumnIndex === -1) {
+        setSuccess(prev => prev + ' (auto-detected columns)');
+      }
     } else {
-      setError(`No valid orders found in ${orders.length} rows. Please check your data.`);
+      setError(`No valid orders found in ${orders.length} rows. Please check your data format.`);
     }
   };
 
@@ -739,14 +841,12 @@ export default function DataMartMainPage() {
     try {
       const token = localStorage.getItem('Token');
       
-      // Transform bulk orders to match API format
       const orders = validOrders.map(order => ({
         productId: order.productId,
         beneficiaryNumber: order.beneficiary,
         quantity: 1
       }));
       
-      // Call bulk order endpoint
       const response = await fetch(`${API_BASE_URL}/purchase/orders/bulk`, {
         method: 'POST',
         headers: {
@@ -768,7 +868,6 @@ export default function DataMartMainPage() {
           localStorage.setItem('userData', JSON.stringify(userData));
         }
         
-        // Update order statuses
         setBulkOrders(prev => prev.map((order) => {
           if (order.isValid) {
             return { ...order, status: 'completed' };
@@ -783,7 +882,6 @@ export default function DataMartMainPage() {
           setBulkParseProgress('');
           setBulkSummary({ total: 0, valid: 0, invalid: 0, totalCost: 0 });
           setSuccess('');
-          // Reset file input
           if (fileInputRef.current) {
             fileInputRef.current.value = '';
           }
@@ -803,7 +901,6 @@ export default function DataMartMainPage() {
     }
   };
 
-  // Export results to Excel
   const exportBulkResults = () => {
     const ws_data = [
       ['Row #', 'Phone Number', 'Capacity', 'Product', 'Price', 'Status', 'Errors']
@@ -827,7 +924,6 @@ export default function DataMartMainPage() {
     XLSX.writeFile(wb, 'bulk_orders_review.xlsx');
   };
 
-  // Clear bulk orders
   const clearBulkOrders = () => {
     setBulkOrders([]);
     setBulkFile(null);
@@ -855,7 +951,6 @@ export default function DataMartMainPage() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Template');
     
-    // Add column widths
     ws['!cols'] = [{ wch: 15 }, { wch: 10 }];
     
     XLSX.writeFile(wb, 'datamart_bulk_template.xlsx');
@@ -884,7 +979,6 @@ export default function DataMartMainPage() {
     try {
       const token = localStorage.getItem('Token');
       
-      // Convert cart items to bulk order format
       const orders = cart.map(item => ({
         productId: item.product.id,
         beneficiaryNumber: item.beneficiaryNumber,
@@ -922,7 +1016,6 @@ export default function DataMartMainPage() {
     }
   };
 
-  // Get filtered bulk orders
   const getFilteredBulkOrders = () => {
     if (filterStatus === 'valid') {
       return bulkOrders.filter(o => o.isValid);
@@ -945,7 +1038,7 @@ export default function DataMartMainPage() {
 
   return (
     <div className="min-h-screen bg-[#2a2d3a] relative">
-      {/* RESPONSIVE HEADER WITH API DOCS NAVIGATION */}
+      {/* HEADER */}
       <header className="bg-[#1f2128] border-b border-gray-700 sticky top-0 z-30">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16">
@@ -960,7 +1053,6 @@ export default function DataMartMainPage() {
               
               <h1 className="text-xl sm:text-2xl font-bold text-yellow-400">DATAMART</h1>
               
-              {/* UPDATED DESKTOP NAVIGATION WITH API DOCS */}
               <nav className="hidden lg:flex items-center gap-6 ml-8">
                 <a href="#" className="text-yellow-400 font-medium hover:text-yellow-500 transition-colors">Home</a>
                 <a href="/orders" className="text-gray-300 hover:text-white transition-colors">Orders</a>
@@ -1018,7 +1110,7 @@ export default function DataMartMainPage() {
         </div>
       </header>
 
-      {/* MOBILE MENU DRAWER WITH API DOCS */}
+      {/* MOBILE MENU DRAWER */}
       {showMobileMenu && (
         <div className="lg:hidden fixed inset-0 z-40">
           <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setShowMobileMenu(false)} />
@@ -1043,7 +1135,6 @@ export default function DataMartMainPage() {
                 </div>
               )}
               
-              {/* UPDATED MOBILE NAVIGATION WITH API DOCS */}
               <nav className="space-y-2">
                 <a href="#" className="flex items-center gap-3 px-3 py-2 text-yellow-400 bg-gray-800 rounded-lg">
                   <Home className="w-5 h-5" />
@@ -1111,7 +1202,7 @@ export default function DataMartMainPage() {
         </div>
       )}
 
-      {/* RESPONSIVE HERO SECTION - Same as original */}
+      {/* HERO SECTION */}
       <section className="bg-gradient-to-r from-yellow-400 to-yellow-600 py-8 sm:py-12 lg:py-16">
         <div className="container mx-auto px-4">
           <div className="text-center">
@@ -1184,7 +1275,7 @@ export default function DataMartMainPage() {
         </div>
       </div>
 
-      {/* MAIN CONTENT - Same as original */}
+      {/* MAIN CONTENT */}
       <main className="container mx-auto px-4 py-6 sm:py-8 lg:py-12">
         {/* Error Message Display */}
         {error && !selectedProduct && purchaseMode !== 'bulk' && (
@@ -1333,28 +1424,30 @@ export default function DataMartMainPage() {
                     
                     {/* File Format Info */}
                     <div className="mt-4 p-3 bg-blue-500 bg-opacity-10 rounded-lg">
-                      <p className="text-blue-400 text-sm mb-1 font-medium">
+                      <p className="text-blue-400 text-sm mb-2 font-medium">
                         <Info className="inline w-4 h-4 mr-1" />
-                        Accepted File Formats:
+                        Smart Column Detection:
                       </p>
                       <ul className="text-blue-300 text-xs space-y-1 ml-5">
-                        <li>• Column 1: "number" OR "beneficiary" (phone)</li>
-                        <li>• Column 2: "capacity" (e.g., 1, 2, 500)</li>
+                        <li>• Auto-detects phone numbers (9-10 digits)</li>
+                        <li>• Auto-detects capacity values (1, 2, 5, 10, 500, etc.)</li>
+                        <li>• Works with or without headers</li>
+                        <li>• Handles various file formats</li>
                       </ul>
                     </div>
                   </div>
                 )}
               </div>
               
-              {/* Instructions with Better Visual */}
+              {/* Instructions */}
               <div>
                 <h4 className="text-base sm:text-lg font-medium text-white mb-4">How It Works</h4>
                 <div className="space-y-3">
                   {[
-                    { icon: <Download className="w-5 h-5" />, text: "Download our template Excel/CSV file" },
+                    { icon: <Download className="w-5 h-5" />, text: "Download template or use your own file" },
                     { icon: <FileText className="w-5 h-5" />, text: "Add phone numbers and data capacities" },
-                    { icon: <Upload className="w-5 h-5" />, text: "Upload the file (max 100 orders)" },
-                    { icon: <Zap className="w-5 h-5" />, text: "Click process to execute all orders instantly" }
+                    { icon: <Upload className="w-5 h-5" />, text: "Upload the file (auto-detects columns)" },
+                    { icon: <Zap className="w-5 h-5" />, text: "Process all valid orders instantly" }
                   ].map((step, idx) => (
                     <div key={idx} className="flex items-start gap-3 p-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors">
                       <span className="flex items-center justify-center w-8 h-8 bg-yellow-400 text-gray-900 rounded-full font-bold text-sm flex-shrink-0">
@@ -1371,16 +1464,18 @@ export default function DataMartMainPage() {
                 <div className="mt-6 p-4 bg-purple-600 bg-opacity-10 border border-purple-500 rounded-lg">
                   <p className="text-purple-400 text-sm font-medium mb-1">
                     <Zap className="inline w-4 h-4 mr-1" />
-                    Pro Tip:
+                    Pro Features:
                   </p>
-                  <p className="text-purple-300 text-xs">
-                    Process up to 100 orders in one click! Perfect for corporate data distribution.
-                  </p>
+                  <ul className="text-purple-300 text-xs space-y-1">
+                    <li>• Smart column detection - no specific format required</li>
+                    <li>• Processes up to 100 orders in one click</li>
+                    <li>• Automatic phone number formatting</li>
+                  </ul>
                 </div>
               </div>
             </div>
             
-            {/* ENHANCED BULK ORDERS PREVIEW */}
+            {/* BULK ORDERS PREVIEW */}
             {bulkOrders.length > 0 && (
               <div className="mt-6 sm:mt-8">
                 {/* Summary Cards */}
@@ -1458,7 +1553,7 @@ export default function DataMartMainPage() {
                   </div>
                 </div>
                 
-                {/* Desktop Table - Shows ALL rows with scrolling */}
+                {/* Desktop Table */}
                 {showPreview && (
                   <div className="hidden sm:block">
                     <div className="bg-gray-700 rounded-lg overflow-hidden">
@@ -1562,7 +1657,7 @@ export default function DataMartMainPage() {
                   </div>
                 )}
                 
-                {/* Mobile Cards - Shows ALL with scrolling */}
+                {/* Mobile Cards */}
                 {showPreview && (
                   <div className="sm:hidden">
                     <div className="max-h-96 overflow-y-auto space-y-3">
@@ -1670,7 +1765,7 @@ export default function DataMartMainPage() {
             )}
           </div>
         ) : selectedProduct ? (
-          // COMPACT SELECTED PRODUCT VIEW - Same as original
+          // SELECTED PRODUCT VIEW
           <div className="bg-[#1f2128] rounded-xl p-4 sm:p-6 shadow-2xl animate-fadeIn max-w-md mx-auto">
             <button
               onClick={() => setSelectedProduct(null)}
@@ -1711,7 +1806,6 @@ export default function DataMartMainPage() {
             )}
 
             <div className="space-y-4">
-              {/* Beneficiary Input */}
               <div>
                 <label className="text-gray-400 text-sm mb-2 block">
                   Beneficiary Phone Number
@@ -1728,7 +1822,6 @@ export default function DataMartMainPage() {
                 </div>
               </div>
 
-              {/* Quantity Selector - Compact */}
               <div className="flex items-center justify-between bg-gray-700 rounded-lg p-2">
                 <label className="text-gray-400 text-sm">Quantity</label>
                 <div className="flex items-center gap-2">
@@ -1750,7 +1843,6 @@ export default function DataMartMainPage() {
                 </div>
               </div>
 
-              {/* Total Price - Compact */}
               <div className="bg-gray-700 rounded-lg p-3 flex justify-between items-center">
                 <span className="text-gray-400 text-sm">Total</span>
                 <span className="text-xl font-bold text-yellow-400">
@@ -1758,7 +1850,6 @@ export default function DataMartMainPage() {
                 </span>
               </div>
 
-              {/* Action Buttons */}
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={handleAddToCart}
@@ -1810,7 +1901,7 @@ export default function DataMartMainPage() {
         )}
       </main>
 
-      {/* RESPONSIVE STATS SECTION - Same as original */}
+      {/* STATS SECTION */}
       <section className="bg-gray-800 py-8 sm:py-12">
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -1834,7 +1925,7 @@ export default function DataMartMainPage() {
         </div>
       </section>
 
-      {/* FOOTER - Same as original */}
+      {/* FOOTER */}
       <footer className="bg-[#1f2128] py-8 border-t border-gray-700">
         <div className="container mx-auto px-4">
           <div className="text-center">
@@ -1844,7 +1935,7 @@ export default function DataMartMainPage() {
         </div>
       </footer>
 
-      {/* CART SIDEBAR - Same as original */}
+      {/* CART SIDEBAR */}
       {showCart && (
         <CartSidebar 
           cart={cart} 
@@ -1856,7 +1947,7 @@ export default function DataMartMainPage() {
         />
       )}
       
-      {/* UPDATED ACCOUNT DROPDOWN WITH API DOCS */}
+      {/* ACCOUNT DROPDOWN */}
       {showAccountMenu && (
         <div className="absolute top-16 right-4 w-48 bg-gray-800 rounded-lg shadow-lg py-1 z-50">
           {userData && (
@@ -1916,7 +2007,7 @@ export default function DataMartMainPage() {
   );
 }
 
-// RESPONSIVE PRODUCT CARD COMPONENT - Same as original
+// PRODUCT CARD COMPONENT
 function ProductCard({ product, onSelect }) {
   return (
     <div
@@ -1956,7 +2047,7 @@ function ProductCard({ product, onSelect }) {
   );
 }
 
-// RESPONSIVE CART SIDEBAR COMPONENT - Same as original
+// CART SIDEBAR COMPONENT
 function CartSidebar({ cart, onClose, onRemoveItem, totalAmount, onCheckout, userBalance }) {
   const [processing, setProcessing] = useState(false);
   
