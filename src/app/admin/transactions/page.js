@@ -46,6 +46,7 @@ export default function TransactionsPage() {
   const [exportStatus, setExportStatus] = useState(null);
   const [exportHistory, setExportHistory] = useState([]);
   const [selectedBatchForReExport, setSelectedBatchForReExport] = useState(null);
+  const [bulkUpdateInProgress, setBulkUpdateInProgress] = useState(false);
   const [exportSettings, setExportSettings] = useState({
     status: 'pending',
     markAsSent: true
@@ -138,11 +139,31 @@ export default function TransactionsPage() {
     }
   };
 
+  const handleSelectAllFailed = () => {
+    const failedTransactionIds = transactions
+      .filter(t => t.status === 'failed')
+      .map(t => t._id);
+    
+    if (failedTransactionIds.length > 0) {
+      setSelectedTransactions(failedTransactionIds);
+      setNotification({
+        type: 'info',
+        title: 'Failed Orders Selected',
+        message: `${failedTransactionIds.length} failed orders selected for bulk update`
+      });
+    } else {
+      setNotification({
+        type: 'info',
+        title: 'No Failed Orders',
+        message: 'No failed orders found to select'
+      });
+    }
+  };
+
   const handleReExportPreview = async (exportId) => {
     try {
       const token = localStorage.getItem('Token');
       
-      // Find the batch ID from export history
       const exportItem = exportHistory.find(e => e.exportId === exportId);
       if (!exportItem) {
         setNotification({
@@ -237,7 +258,6 @@ export default function TransactionsPage() {
           return;
         }
       } else {
-        // Handle Excel download
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -335,6 +355,8 @@ export default function TransactionsPage() {
       return;
     }
 
+    setBulkUpdateInProgress(true);
+    
     try {
       const token = localStorage.getItem('Token');
       const response = await fetch('https://server-datamart-reseller.onrender.com/api/admin/transactions/bulk-status-update', {
@@ -355,7 +377,7 @@ export default function TransactionsPage() {
         setNotification({
           type: 'success',
           title: 'Bulk Update Successful',
-          message: `Updated ${data.results.successfullyUpdated} transactions`
+          message: `Updated ${data.results.successfullyUpdated} transactions. ${data.results.details.walletOperations.charged.length > 0 ? `Charged ${data.results.details.walletOperations.charged.length} users.` : ''}`
         });
         setSelectedTransactions([]);
         setShowBulkStatusModal(false);
@@ -375,6 +397,8 @@ export default function TransactionsPage() {
         title: 'Error',
         message: 'Failed to perform bulk update'
       });
+    } finally {
+      setBulkUpdateInProgress(false);
     }
   };
 
@@ -551,41 +575,6 @@ export default function TransactionsPage() {
     }
   };
 
-  const handleRetry = async (transactionId) => {
-    try {
-      const token = localStorage.getItem('Token');
-      const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/transactions/${transactionId}/retry`, {
-        method: 'POST',
-        headers: {
-          'x-auth-token': token
-        }
-      });
-
-      const data = await response.json();
-      if (data.success) {
-        setNotification({
-          type: 'success',
-          title: 'Retry Initiated',
-          message: 'Transaction retry has been initiated'
-        });
-        fetchTransactions();
-      } else {
-        setNotification({
-          type: 'error',
-          title: 'Retry Failed',
-          message: data.message || 'Error retrying transaction'
-        });
-      }
-    } catch (error) {
-      console.error('Error retrying transaction:', error);
-      setNotification({
-        type: 'error',
-        title: 'Error',
-        message: 'Failed to retry transaction'
-      });
-    }
-  };
-
   const viewDetails = async (transactionId) => {
     try {
       const token = localStorage.getItem('Token');
@@ -708,7 +697,7 @@ export default function TransactionsPage() {
     }
   };
 
-  // Export Status Bar Component - Updated with Export History
+  // Export Status Bar Component
   const ExportStatusBar = () => {
     if (!exportStatus?.lastExport && exportHistory.length === 0) return null;
     
@@ -743,7 +732,6 @@ export default function TransactionsPage() {
           Orders are displayed oldest first to ensure fair serving (FIFO)
         </div>
         
-        {/* Recent Export History */}
         {exportHistory.length > 0 && (
           <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-700">
             <div className="text-xs text-blue-800 dark:text-blue-200 font-medium mb-2">Recent Exports:</div>
@@ -866,6 +854,7 @@ export default function TransactionsPage() {
                   value={bulkStatusUpdate.status}
                   onChange={(e) => setBulkStatusUpdate({...bulkStatusUpdate, status: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                  disabled={bulkUpdateInProgress}
                 >
                   <option value="">Select status</option>
                   <option value="pending">Pending</option>
@@ -885,8 +874,20 @@ export default function TransactionsPage() {
                   rows="3"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
                   placeholder="Enter reason for bulk update..."
+                  disabled={bulkUpdateInProgress}
                 />
               </div>
+              
+              {bulkUpdateInProgress && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
+                  <div className="flex items-center">
+                    <ArrowPathIcon className="h-5 w-5 mr-2 animate-spin text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm text-blue-800 dark:text-blue-200">
+                      Processing bulk update...
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
             
             <div className="mt-6 flex justify-end space-x-3">
@@ -895,15 +896,24 @@ export default function TransactionsPage() {
                   setShowBulkStatusModal(false);
                   setBulkStatusUpdate({ status: '', reason: '' });
                 }}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                disabled={bulkUpdateInProgress}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 onClick={handleBulkStatusUpdate}
-                className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600"
+                disabled={bulkUpdateInProgress}
+                className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Update Status
+                {bulkUpdateInProgress ? (
+                  <span className="flex items-center">
+                    <ArrowPathIcon className="h-4 w-4 mr-1 animate-spin" />
+                    Updating...
+                  </span>
+                ) : (
+                  'Update Status'
+                )}
               </button>
             </div>
           </div>
@@ -922,7 +932,6 @@ export default function TransactionsPage() {
               Re-Export Batch to MTN
             </h2>
             
-            {/* Re-Export Info */}
             <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded mb-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
@@ -944,7 +953,6 @@ export default function TransactionsPage() {
               </div>
             </div>
             
-            {/* Re-Export Settings */}
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded p-4 mb-4">
               <label className="flex items-start space-x-3">
                 <input
@@ -970,7 +978,6 @@ export default function TransactionsPage() {
               </label>
             </div>
             
-            {/* Preview Orders (Number and Capacity only) */}
             <div>
               <h3 className="font-semibold mb-2 text-gray-900 dark:text-white">
                 Preview Orders (First 10)
@@ -1012,7 +1019,6 @@ export default function TransactionsPage() {
               </div>
             </div>
             
-            {/* Excel Format Notice */}
             <div className="mt-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded p-3">
               <div className="flex items-start">
                 <InformationCircleIcon className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 mr-2" />
@@ -1049,10 +1055,7 @@ export default function TransactionsPage() {
               >
                 {exportInProgress ? (
                   <span className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <ArrowPathIcon className="h-4 w-4 mr-1 animate-spin" />
                     Re-Exporting...
                   </span>
                 ) : (
@@ -1071,7 +1074,6 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Notification Toast */}
       <NotificationToast />
 
       {/* Page Header */}
@@ -1082,9 +1084,30 @@ export default function TransactionsPage() {
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">View and manage all platform transactions</p>
           </div>
           <div className="flex space-x-2">
+            {transactions.some(t => t.status === 'failed') && (
+              <button
+                onClick={handleSelectAllFailed}
+                className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
+              >
+                <XCircleIcon className="h-5 w-5 mr-2" />
+                Select Failed ({transactions.filter(t => t.status === 'failed').length})
+              </button>
+            )}
+            
             {selectedTransactions.length > 0 && (
               <button
-                onClick={() => setShowBulkStatusModal(true)}
+                onClick={() => {
+                  const allSelectedAreFailed = selectedTransactions.every(id => {
+                    const transaction = transactions.find(t => t._id === id);
+                    return transaction && transaction.status === 'failed';
+                  });
+                  
+                  if (allSelectedAreFailed) {
+                    setBulkStatusUpdate({ status: 'pending', reason: 'Reprocessing failed orders' });
+                  }
+                  
+                  setShowBulkStatusModal(true);
+                }}
                 className="flex items-center px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 dark:bg-yellow-500 dark:hover:bg-yellow-600"
               >
                 <PencilSquareIcon className="h-5 w-5 mr-2" />
@@ -1116,7 +1139,6 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* Export Status Bar - Updated */}
       <ExportStatusBar />
 
       {/* Filters */}
@@ -1174,7 +1196,7 @@ export default function TransactionsPage() {
         </div>
       </div>
 
-      {/* Transactions Table (same as before) */}
+      {/* Transactions Table */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -1226,7 +1248,11 @@ export default function TransactionsPage() {
                 </tr>
               ) : (
                 transactions.map((transaction) => (
-                  <tr key={transaction._id} className={`${selectedTransactions.includes(transaction._id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''} hover:bg-gray-50 dark:hover:bg-gray-700/50`}>
+                  <tr key={transaction._id} className={`
+                    ${selectedTransactions.includes(transaction._id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''} 
+                    ${transaction.status === 'failed' && !selectedTransactions.includes(transaction._id) ? 'bg-red-50 dark:bg-red-900/10' : ''}
+                    hover:bg-gray-50 dark:hover:bg-gray-700/50
+                  `}>
                     <td className="px-6 py-4">
                       <input
                         type="checkbox"
@@ -1294,15 +1320,6 @@ export default function TransactionsPage() {
                             <ArrowUturnLeftIcon className="h-5 w-5" />
                           </button>
                         )}
-                        {transaction.status === 'failed' && (
-                          <button
-                            onClick={() => handleRetry(transaction._id)}
-                            className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
-                            title="Retry"
-                          >
-                            <ArrowPathIcon className="h-5 w-5" />
-                          </button>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -1338,15 +1355,11 @@ export default function TransactionsPage() {
         )}
       </div>
 
-      {/* All Modals */}
-      
-      {/* Bulk Status Update Modal */}
+      {/* Modals */}
       <BulkStatusUpdateModal />
-      
-      {/* Re-Export Modal */}
       <ReExportModal />
 
-      {/* Status Update Modal (same as before) */}
+      {/* Status Update Modal */}
       {showStatusModal && selectedTransaction && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
@@ -1421,7 +1434,7 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* Export Batch Modal (same as before) */}
+      {/* Export Batch Modal */}
       {showExportModal && exportPreview && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-4xl max-h-[80vh] overflow-y-auto">
@@ -1429,7 +1442,6 @@ export default function TransactionsPage() {
               Export Batch to MTN
             </h2>
             
-            {/* Export Settings */}
             <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded mb-4">
               <h3 className="font-semibold mb-3 text-gray-900 dark:text-white">Export Settings</h3>
               <div className="space-y-4">
@@ -1498,7 +1510,6 @@ export default function TransactionsPage() {
               </div>
             </div>
             
-            {/* Preview Data */}
             <div>
               <h3 className="font-semibold mb-2 text-gray-900 dark:text-white">
                 Preview ({exportPreview.count} orders)
@@ -1594,10 +1605,7 @@ export default function TransactionsPage() {
                 >
                   {exportInProgress ? (
                     <span className="flex items-center">
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
+                      <ArrowPathIcon className="h-4 w-4 mr-1 animate-spin" />
                       Exporting...
                     </span>
                   ) : (
@@ -1622,7 +1630,7 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      {/* Transaction Details Modal (same as before) */}
+      {/* Transaction Details Modal */}
       {showDetailsModal && selectedTransaction && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
