@@ -43,7 +43,7 @@ export default function TransactionsPage() {
   const [exportStatus, setExportStatus] = useState(null);
   const [exportSettings, setExportSettings] = useState({
     status: 'pending',
-    markAsSent: false // Changed from markAsSuccessful to markAsSent
+    markAsSent: true // Changed to true by default for automatic sending to MTN
   });
   const router = useRouter();
 
@@ -68,6 +68,8 @@ export default function TransactionsPage() {
       const params = new URLSearchParams({
         page: currentPage,
         limit: 40,
+        sort: 'createdAt', // Add sort field
+        order: 'asc', // Ascending order - oldest first for fair serving
         ...(statusFilter && { status: statusFilter }),
         ...(typeFilter && { type: typeFilter }),
         ...(searchTerm && { search: searchTerm }),
@@ -311,9 +313,10 @@ export default function TransactionsPage() {
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
         
+        // Reset export settings keeping markAsSent as true
         setExportSettings({
           status: 'pending',
-          markAsSent: false
+          markAsSent: true // Keep as true by default
         });
         setShowExportModal(false);
         setExportInProgress(false);
@@ -568,6 +571,12 @@ export default function TransactionsPage() {
               Processing {exportStatus.currentProcessing.activeExports?.length || 0} export(s)
             </span>
           )}
+        </div>
+        
+        {/* Add Fair Serving Notice */}
+        <div className="mt-2 text-xs text-blue-700 dark:text-blue-300">
+          <InformationCircleIcon className="h-3 w-3 inline mr-1" />
+          Orders are displayed oldest first to ensure fair serving (FIFO)
         </div>
       </div>
     );
@@ -1083,7 +1092,7 @@ export default function TransactionsPage() {
                     onChange={(e) => setExportSettings({
                       ...exportSettings,
                       status: e.target.value,
-                      markAsSent: false // Reset when changing filter
+                      markAsSent: e.target.value === 'pending' // Auto-enable for pending orders
                     })}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   >
@@ -1108,7 +1117,7 @@ export default function TransactionsPage() {
                       />
                       <div>
                         <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          Send to MTN for Processing
+                          Send to MTN for Processing (Recommended)
                         </span>
                         <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                           {exportSettings.markAsSent 
