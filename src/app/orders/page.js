@@ -25,7 +25,8 @@ import {
   ArrowLeft,
   Send,
   Info,
-  HelpCircle
+  HelpCircle,
+  AlertTriangle
 } from 'lucide-react';
 
 // API Base URL
@@ -285,7 +286,7 @@ export default function TransactionHistory() {
       case 'successful':
         return 'Data delivered successfully';
       case 'failed':
-        return 'Transaction failed';
+        return 'Auto-retry in progress - DO NOT reorder';
       case 'pending':
         return 'In queue to be sent to MTN';
       case 'sent':
@@ -319,6 +320,9 @@ export default function TransactionHistory() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+  
+  // Check if user has failed orders
+  const hasFailedOrders = transactions.some(tx => tx.status === 'failed');
   
   if (loading && transactions.length === 0) {
     return (
@@ -376,6 +380,32 @@ export default function TransactionHistory() {
         </div>
       </div>
       
+      {/* Failed Orders Warning Banner */}
+      {activeTab === 'orders' && hasFailedOrders && (
+        <div className="container mx-auto px-4 pt-6">
+          <div className="bg-red-900/30 border border-red-500/50 rounded-lg p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-6 h-6 text-red-400 flex-shrink-0 mt-1" />
+              <div className="flex-1">
+                <h3 className="text-red-400 font-semibold text-lg mb-1">Important: Failed Orders Auto-Retry System</h3>
+                <p className="text-white mb-2">
+                  ⚠️ <strong>DO NOT place the same order again if it fails!</strong>
+                </p>
+                <ul className="space-y-1 text-gray-300 text-sm">
+                  <li>• Our system automatically retries failed orders multiple times</li>
+                  <li>• When retrying, the amount will be deducted from your wallet automatically</li>
+                  <li>• You will receive a notification when the retry is successful</li>
+                  <li>• If all retries fail, your money will be refunded to your wallet</li>
+                </ul>
+                <p className="text-yellow-400 text-sm mt-2 font-medium">
+                  Placing duplicate orders will result in double charges!
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Status Information Banner */}
       {activeTab === 'orders' && (
         <div className="container mx-auto px-4 pt-6">
@@ -421,7 +451,13 @@ export default function TransactionHistory() {
                         <X className="w-3 h-3" />
                         Failed
                       </span>
-                      <p className="text-gray-300 text-sm">Transaction failed - amount will be refunded to your wallet</p>
+                      <div className="flex-1">
+                        <p className="text-gray-300 text-sm">Transaction failed - amount has been refunded to your wallet</p>
+                        <div className="mt-2 p-2 bg-red-900/20 border border-red-500/30 rounded">
+                          <p className="text-red-400 text-xs font-semibold mb-1">⚠️ IMPORTANT: DO NOT REORDER!</p>
+                          <p className="text-gray-300 text-xs">System automatically retries failed orders. When retrying, money will be deducted from your wallet.</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -431,6 +467,7 @@ export default function TransactionHistory() {
                     <span className="text-yellow-400">⚡ Pending = Queue</span>
                     <span className="text-blue-400">📤 Sent = Processing at MTN</span>
                     <span className="text-green-400">✓ Successful = Delivered</span>
+                    <span className="text-red-400">⚠️ Failed = Auto-retry active</span>
                     <span className="text-gray-400 ml-auto">Click ⓘ for details</span>
                   </div>
                 )}
@@ -481,13 +518,21 @@ export default function TransactionHistory() {
                 <p className="text-xs text-gray-500 mt-1">In Queue</p>
               </div>
               
-              <div className="bg-gray-800 rounded-lg p-4">
+              <div className="bg-gray-800 rounded-lg p-4 relative">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-gray-400 text-sm">Failed</p>
                   <X className="w-4 h-4 text-red-400" />
                 </div>
                 <p className="text-2xl font-bold text-white">{stats.failedOrders}</p>
-                <p className="text-xs text-gray-500 mt-1">Refunded</p>
+                <p className="text-xs text-gray-500 mt-1">Auto-retrying</p>
+                {stats.failedOrders > 0 && (
+                  <div className="absolute -top-1 -right-1">
+                    <span className="flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                    </span>
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -603,7 +648,7 @@ export default function TransactionHistory() {
                     <option value="successful">Successful (Delivered)</option>
                     <option value="sent">Sent (Processing)</option>
                     <option value="pending">Pending (Queue)</option>
-                    <option value="failed">Failed</option>
+                    <option value="failed">Failed (Auto-retry)</option>
                   </>
                 ) : (
                   <>
@@ -719,7 +764,7 @@ export default function TransactionHistory() {
                           {tx.status}
                         </span>
                         {activeTab === 'orders' && (
-                          <span className="text-xs text-gray-500">
+                          <span className={`text-xs ${tx.status === 'failed' ? 'text-red-400 font-medium' : 'text-gray-500'}`}>
                             {getStatusDescription(tx.status)}
                           </span>
                         )}
@@ -753,12 +798,20 @@ export default function TransactionHistory() {
                       {tx.status}
                     </span>
                     {activeTab === 'orders' && (
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className={`text-xs mt-1 ${tx.status === 'failed' ? 'text-red-400 font-medium' : 'text-gray-500'}`}>
                         {getStatusDescription(tx.status)}
                       </p>
                     )}
                   </div>
                 </div>
+                
+                {/* Show warning for failed orders on mobile */}
+                {tx.status === 'failed' && activeTab === 'orders' && (
+                  <div className="mb-2 p-2 bg-red-900/20 border border-red-500/30 rounded text-xs">
+                    <p className="text-red-400 font-medium">⚠️ DO NOT REORDER</p>
+                    <p className="text-gray-300">Auto-retry in progress</p>
+                  </div>
+                )}
                 
                 <div className="flex justify-between items-end">
                   <div>
