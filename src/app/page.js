@@ -1,4 +1,4 @@
-// app/page.jsx - COMPLETE DATAMART MAIN PAGE WITH BULK ORDER COMPONENT
+// app/page.jsx - COMPLETE DATAMART MAIN PAGE WITH FIXED ERROR MESSAGES
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -695,22 +695,23 @@ export default function DataMartMainPage() {
 
       {/* MAIN CONTENT */}
       <main className="container mx-auto px-4 py-6 sm:py-8 lg:py-12">
-        {/* Error Message Display */}
+        {/* ============================================= */}
+        {/* FIXED ERROR/SUCCESS MESSAGES - NOW VISIBLE! */}
+        {/* ============================================= */}
         {error && !selectedProduct && purchaseMode !== 'bulk' && (
-          <div className="mb-6 p-4 bg-red-500 bg-opacity-10 border border-red-500 rounded-lg">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-              <p className="text-red-500">{error}</p>
+          <div className="mb-6 p-4 bg-red-600 rounded-lg shadow-lg">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-6 h-6 text-white flex-shrink-0" />
+              <p className="text-white font-semibold text-base">{error}</p>
             </div>
           </div>
         )}
 
-        {/* Success Message Display */}
         {success && !selectedProduct && purchaseMode !== 'bulk' && (
-          <div className="mb-6 p-4 bg-green-500 bg-opacity-10 border border-green-500 rounded-lg">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-              <p className="text-green-500">{success}</p>
+          <div className="mb-6 p-4 bg-green-600 rounded-lg shadow-lg">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="w-6 h-6 text-white flex-shrink-0" />
+              <p className="text-white font-semibold text-base">{success}</p>
             </div>
           </div>
         )}
@@ -746,20 +747,26 @@ export default function DataMartMainPage() {
               </p>
             </div>
 
+            {/* ============================================= */}
+            {/* FIXED ERROR MESSAGE - NOW VISIBLE! */}
+            {/* ============================================= */}
             {error && (
-              <div className="mb-3 p-2 bg-red-500 bg-opacity-10 border border-red-500 rounded-lg">
-                <div className="flex items-start gap-2">
-                  <X className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-red-500 text-sm">{error}</span>
+              <div className="mb-4 p-4 bg-red-600 rounded-lg shadow-lg">
+                <div className="flex items-start gap-3">
+                  <X className="w-5 h-5 text-white flex-shrink-0 mt-0.5" />
+                  <span className="text-white font-semibold text-sm">{error}</span>
                 </div>
               </div>
             )}
             
+            {/* ============================================= */}
+            {/* FIXED SUCCESS MESSAGE - NOW VISIBLE! */}
+            {/* ============================================= */}
             {success && (
-              <div className="mb-3 p-2 bg-green-500 bg-opacity-10 border border-green-500 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-green-500 flex-shrink-0" />
-                  <span className="text-green-500 text-sm">{success}</span>
+              <div className="mb-4 p-4 bg-green-600 rounded-lg shadow-lg">
+                <div className="flex items-center gap-3">
+                  <Check className="w-5 h-5 text-white flex-shrink-0" />
+                  <span className="text-white font-semibold text-sm">{success}</span>
                 </div>
               </div>
             )}
