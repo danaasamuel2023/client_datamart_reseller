@@ -1,5 +1,6 @@
 'use client';
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { 
   Book, Code, Copy, Check, ChevronRight, ChevronDown, Lock, Globe, Zap, Package,
   CreditCard, ShoppingCart, FileSpreadsheet, Activity, Webhook, BarChart3, AlertCircle,
@@ -292,10 +293,10 @@ print(response.json())`
                 <p className="text-gray-400 text-sm">Version 1.0 - RESTful API Documentation</p>
               </div>
             </div>
-            <a href="/" className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white transition-colors">
+            <Link href="/" className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-white transition-colors">
               <ArrowLeft className="w-4 h-4" />
               <span className="text-sm">Back</span>
-            </a>
+            </Link>
           </div>
           <div className="flex items-center gap-4 text-sm">
             <span className="px-3 py-1 bg-green-500 bg-opacity-20 text-green-400 rounded font-medium">
