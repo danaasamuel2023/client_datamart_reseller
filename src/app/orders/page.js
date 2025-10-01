@@ -26,7 +26,9 @@ import {
   Send,
   Info,
   HelpCircle,
-  AlertTriangle
+  AlertTriangle,
+  FileText,
+  ExternalLink
 } from 'lucide-react';
 
 // API Base URL
@@ -299,13 +301,14 @@ export default function TransactionHistory() {
   // Export transactions
   const handleExport = () => {
     const csvContent = [
-      ['Date', 'Type', 'Amount', 'Status', 'Reference', 'Description'].join(','),
+      ['Date', 'Type', 'Amount', 'Status', 'Reference', 'Portal ID', 'Description'].join(','),
       ...transactions.map(tx => [
         formatDate(tx.createdAt || tx.date),
         tx.type || 'data_purchase',
         tx.amount,
         tx.status,
         tx.reference || tx.transactionId,
+        tx.metadata?.portalId || '',
         tx.description || `${tx.product} for ${tx.beneficiary}`
       ].join(','))
     ].join('\n');
@@ -644,7 +647,7 @@ export default function TransactionHistory() {
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                    placeholder="Transaction ID or phone"
+                    placeholder="Transaction ID, phone, or Portal ID"
                     className="w-full pl-10 pr-4 py-2 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-400"
                   />
                 </div>
@@ -742,7 +745,7 @@ export default function TransactionHistory() {
                     Status
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                    Reference
+                    Reference / Portal ID
                   </th>
                 </tr>
               </thead>
@@ -790,8 +793,25 @@ export default function TransactionHistory() {
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-400 font-mono">
-                      {tx.reference || tx.transactionId}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <div className="space-y-1">
+                        <div className="text-gray-400 font-mono text-xs">
+                          Ref: {tx.reference || tx.transactionId}
+                        </div>
+                        {tx.metadata?.portalId && (
+                          <div className="flex items-center gap-1">
+                            <FileText className="w-3 h-3 text-blue-400" />
+                            <span className="text-blue-400 text-xs font-medium">
+                              Portal: {tx.metadata.portalId}
+                            </span>
+                          </div>
+                        )}
+                        {tx.metadata?.exportId && (
+                          <div className="text-gray-500 text-xs">
+                            Export: {tx.metadata.exportId.substring(0, 8)}...
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -835,15 +855,25 @@ export default function TransactionHistory() {
                 )}
                 
                 <div className="flex justify-between items-end">
-                  <div>
+                  <div className="space-y-1">
                     <p className="text-gray-400 text-sm">
                       {activeTab === 'orders' 
                         ? `To: ${tx.beneficiary}`
                         : tx.purpose || tx.description}
                     </p>
-                    <p className="text-gray-500 text-xs mt-1">
-                      Ref: {(tx.reference || tx.transactionId)?.substring(0, 12)}...
-                    </p>
+                    <div className="space-y-0.5">
+                      <p className="text-gray-500 text-xs">
+                        Ref: {(tx.reference || tx.transactionId)?.substring(0, 12)}...
+                      </p>
+                      {tx.metadata?.portalId && (
+                        <div className="flex items-center gap-1">
+                          <FileText className="w-3 h-3 text-blue-400" />
+                          <span className="text-blue-400 text-xs font-medium">
+                            Portal: {tx.metadata.portalId}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <p className={`text-lg font-bold ${tx.type === 'credit' ? 'text-green-400' : 'text-white'}`}>
                     {tx.type === 'credit' ? '+' : ''}{formatAmount(tx.amount)}

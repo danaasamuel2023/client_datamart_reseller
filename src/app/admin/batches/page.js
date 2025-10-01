@@ -12,7 +12,11 @@ import {
   FolderIcon,
   CheckCircleIcon,
   XCircleIcon,
-  ClockIcon
+  ClockIcon,
+  IdentificationIcon,
+  ArrowPathIcon,
+  ExclamationTriangleIcon,
+  CheckBadgeIcon
 } from '@heroicons/react/24/outline';
 
 export default function BatchesPage() {
@@ -29,6 +33,10 @@ export default function BatchesPage() {
   const [batchOrders, setBatchOrders] = useState([]);
   const [orderSearch, setOrderSearch] = useState('');
   const [stats, setStats] = useState(null);
+  
+  // Portal ID states
+  const [savingPortalId, setSavingPortalId] = useState(null);
+  
   const router = useRouter();
 
   useEffect(() => {
@@ -100,12 +108,16 @@ export default function BatchesPage() {
     }
   };
 
-  const reExportBatch = async (batchId) => {
+  const reExportBatch = async (batchId, markAsSuccessful = false) => {
     try {
       const token = localStorage.getItem('Token');
       const response = await fetch(`https://server-datamart-reseller.onrender.com/api/admin/batches/${batchId}/re-export`, {
         method: 'POST',
-        headers: { 'x-auth-token': token }
+        headers: { 
+          'x-auth-token': token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ markAsSuccessful })
       });
 
       const blob = await response.blob();
@@ -117,8 +129,170 @@ export default function BatchesPage() {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
+      
+      // Refresh batches after re-export
+      fetchBatches();
     } catch (error) {
       console.error('Error re-exporting batch:', error);
+    }
+  };
+
+  const submitPortalId = async () => {
+    try {
+      setSubmittingPortal(true);
+      const token = localStorage.getItem('Token');
+      
+      const response = await fetch(
+        `https://server-datamart-reseller.onrender.com/api/admin/batches/${selectedBatchForPortal._id}/portal-id`,
+        {
+          method: 'POST',
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            portalId,
+            estimatedMinutes,
+            notes: portalNotes
+          })
+        }
+      );
+
+      const data = await response.json();
+      
+      if (data.success) {
+        alert(`Portal ID ${portalId} successfully linked to batch!`);
+        setShowPortalModal(false);
+        setPortalId('');
+        setPortalNotes('');
+        setEstimatedMinutes(30);
+        fetchBatches(); // Refresh the list
+      } else {
+        alert(data.message || 'Error submitting portal ID');
+      }
+    } catch (error) {
+      console.error('Error submitting portal ID:', error);
+      alert('Failed to submit portal ID');
+    } finally {
+      setSubmittingPortal(false);
+    }
+  };
+
+  const updatePortalStatus = async () => {
+    try {
+      setUpdatingStatus(true);
+      const token = localStorage.getItem('Token');
+      
+      const response = await fetch(
+        `https://server-datamart-reseller.onrender.com/api/admin/portal/${selectedPortalForUpdate.portalTracking.portalId}/status`,
+        {
+          method: 'PATCH',
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            status: newPortalStatus,
+            notes: statusUpdateNotes,
+            completionTime: newPortalStatus === 'completed' ? new Date() : null
+          })
+        }
+      );
+
+      const data = await response.json();
+      
+      if (data.success) {
+        alert(`Portal status updated to ${newPortalStatus}`);
+        setShowStatusUpdateModal(false);
+        setNewPortalStatus('');
+        setStatusUpdateNotes('');
+        fetchBatches();
+      } else {
+        alert(data.message || 'Error updating portal status');
+      }
+    } catch (error) {
+      console.error('Error updating portal status:', error);
+      alert('Failed to update portal status');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  const quickSavePortalId = async (batchId, portalId) => {
+    if (!portalId.trim()) {
+      alert('Please enter a Portal ID');
+      return;
+    }
+    
+    try {
+      setSavingPortalId(batchId);
+      const token = localStorage.getItem('Token');
+      
+      const response = await fetch(
+        `https://server-datamart-reseller.onrender.com/api/admin/batches/${batchId}/portal-id`,
+        {
+          method: 'POST',
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            portalId: portalId.trim(),
+            estimatedMinutes: 30,
+            notes: 'Quick entry'
+          })
+        }
+      );
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Clear the input
+        const input = document.getElementById(`portal-${batchId}`);
+        if (input) input.value = '';
+        // Refresh the list
+        fetchBatches();
+      } else {
+        alert(data.message || 'Error saving portal ID');
+      }
+    } catch (error) {
+      console.error('Error saving portal ID:', error);
+      alert('Failed to save portal ID');
+    } finally {
+      setSavingPortalId(null);
+    }
+  };
+
+  const quickUpdatePortalStatus = async (batch, newStatus) => {
+    try {
+      const token = localStorage.getItem('Token');
+      
+      const response = await fetch(
+        `https://server-datamart-reseller.onrender.com/api/admin/portal/${batch.portalTracking.portalId}/status`,
+        {
+          method: 'PATCH',
+          headers: {
+            'x-auth-token': token,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            status: newStatus,
+            notes: 'Quick status update',
+            completionTime: newStatus === 'completed' ? new Date() : null
+          })
+        }
+      );
+
+      const data = await response.json();
+      
+      if (data.success) {
+        fetchBatches();
+      } else {
+        alert(data.message || 'Error updating portal status');
+      }
+    } catch (error) {
+      console.error('Error updating portal status:', error);
+      alert('Failed to update portal status');
     }
   };
 
@@ -129,6 +303,17 @@ export default function BatchesPage() {
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
+    });
+  };
+
+  const formatDateWithSeconds = (date) => {
+    return new Date(date).toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
     });
   };
 
@@ -149,6 +334,31 @@ export default function BatchesPage() {
 
     return (
       <span className={`px-2 py-1 text-xs rounded-full ${statusStyles[status] || 'bg-gray-100 text-gray-800'}`}>
+        {status}
+      </span>
+    );
+  };
+
+  const getPortalStatusBadge = (status) => {
+    const statusStyles = {
+      pending: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400',
+      submitted: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+      processing: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+      completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+      failed: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+    };
+
+    const icons = {
+      pending: <ClockIcon className="h-3 w-3 inline mr-1" />,
+      submitted: <ArrowPathIcon className="h-3 w-3 inline mr-1" />,
+      processing: <ArrowPathIcon className="h-3 w-3 inline mr-1 animate-spin" />,
+      completed: <CheckBadgeIcon className="h-3 w-3 inline mr-1" />,
+      failed: <ExclamationTriangleIcon className="h-3 w-3 inline mr-1" />
+    };
+
+    return (
+      <span className={`px-2 py-1 text-xs rounded-full inline-flex items-center ${statusStyles[status] || 'bg-gray-100 text-gray-800'}`}>
+        {icons[status]}
         {status}
       </span>
     );
@@ -233,7 +443,7 @@ export default function BatchesPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Order Batches</h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              View and manage exported order batches (max 40 orders per batch)
+              View and manage exported order batches with portal tracking (max 40 orders per batch)
             </p>
           </div>
           <button
@@ -252,7 +462,7 @@ export default function BatchesPage() {
           <div className="lg:col-span-2 relative">
             <input
               type="text"
-              placeholder="Search batch ID, transaction, phone..."
+              placeholder="Search batch ID, portal ID, transaction, phone..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
@@ -298,22 +508,22 @@ export default function BatchesPage() {
                   Batch ID
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Batch #
+                  Created Date/Time
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Export Date
+                  Portal ID
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Exported By
+                  Portal Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Orders
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Total Amount
+                  Amount
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Status
+                  Batch Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Actions
@@ -337,22 +547,82 @@ export default function BatchesPage() {
                 batches.map((batch) => (
                   <tr key={batch._id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {batch.batchId}
+                      <div>
+                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {batch.batchId}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          #{batch.batchNumber}
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-900 dark:text-gray-100">
-                        #{batch.batchNumber}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                      {formatDate(batch.exportDate)}
+                      <div>
+                        <div className="text-sm text-gray-900 dark:text-gray-100">
+                          {formatDate(batch.createdAt || batch.exportDate)}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          by {batch.exportedBy?.fullName}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900 dark:text-gray-100">
-                        {batch.exportedBy?.fullName}
-                      </div>
+                      {batch.portalTracking?.portalId ? (
+                        <div>
+                          <div className="text-sm font-mono text-blue-600 dark:text-blue-400">
+                            {batch.portalTracking.portalId}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {formatDate(batch.portalTracking.enteredAt)}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-1">
+                          <input
+                            type="text"
+                            placeholder="Portal ID"
+                            id={`portal-${batch._id}`}
+                            className="w-28 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') {
+                                quickSavePortalId(batch._id, e.target.value);
+                              }
+                            }}
+                          />
+                          <button
+                            onClick={() => {
+                              const input = document.getElementById(`portal-${batch._id}`);
+                              if (input?.value) {
+                                quickSavePortalId(batch._id, input.value);
+                              }
+                            }}
+                            className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {batch.portalTracking?.portalId ? (
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-1">
+                            <select
+                              value={batch.portalTracking.status}
+                              onChange={(e) => quickUpdatePortalStatus(batch, e.target.value)}
+                              className="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                              disabled={batch.portalTracking.status === 'completed' || batch.portalTracking.status === 'failed'}
+                            >
+                              <option value="submitted">Submitted</option>
+                              <option value="processing">Processing</option>
+                              <option value="completed">Completed</option>
+                              <option value="failed">Failed</option>
+                            </select>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">-</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900 dark:text-gray-100">
@@ -428,7 +698,7 @@ export default function BatchesPage() {
         )}
       </div>
 
-      {/* Batch Details Modal */}
+      {/* Batch Details Modal (existing) */}
       {showBatchModal && selectedBatch && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-6xl max-h-[80vh] overflow-y-auto">
@@ -440,14 +710,62 @@ export default function BatchesPage() {
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   Batch #{selectedBatch.batchNumber} exported on {formatDate(selectedBatch.exportDate)}
                 </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Created: {formatDateWithSeconds(selectedBatch.createdAt || selectedBatch.exportDate)}
+                </p>
               </div>
-              <button
-                onClick={() => reExportBatch(selectedBatch._id)}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-              >
-                Re-export Excel
-              </button>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => reExportBatch(selectedBatch._id)}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                >
+                  Re-export Excel
+                </button>
+              </div>
             </div>
+
+            {/* Portal Tracking Info */}
+            {selectedBatch.portalTracking?.portalId && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+                <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-300 mb-2">Portal Tracking</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <p className="text-xs text-blue-700 dark:text-blue-400">Portal ID</p>
+                    <p className="text-sm font-mono font-semibold text-blue-900 dark:text-blue-200">
+                      {selectedBatch.portalTracking.portalId}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-blue-700 dark:text-blue-400">Status</p>
+                    <div className="mt-1">
+                      {getPortalStatusBadge(selectedBatch.portalTracking.status)}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-blue-700 dark:text-blue-400">Submitted At</p>
+                    <p className="text-sm text-blue-900 dark:text-blue-200">
+                      {formatDate(selectedBatch.portalTracking.enteredAt)}
+                    </p>
+                  </div>
+                  {selectedBatch.portalTracking.actualCompletionTime && (
+                    <div>
+                      <p className="text-xs text-blue-700 dark:text-blue-400">Completed At</p>
+                      <p className="text-sm text-blue-900 dark:text-blue-200">
+                        {formatDate(selectedBatch.portalTracking.actualCompletionTime)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                {selectedBatch.portalTracking.notes && (
+                  <div className="mt-3">
+                    <p className="text-xs text-blue-700 dark:text-blue-400">Notes</p>
+                    <p className="text-sm text-blue-900 dark:text-blue-200 mt-1">
+                      {selectedBatch.portalTracking.notes}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Batch Summary */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

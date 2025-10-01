@@ -1,51 +1,24 @@
-// app/page.jsx - COMPLETE DATAMART MAIN PAGE WITH FIXED ERROR MESSAGES
+// app/page.jsx - COMPLETE DATAMART MAIN PAGE WITH IMPORTED NAVIGATION
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import BulkOrderComponent from './../../component/bulkOrder';
+import Navigation from '../../component/nav';
+import BulkOrderComponent from '../../component/bulkOrder';
 import { 
   ShoppingCart, 
   X, 
   Check, 
   Loader2, 
   Phone, 
-  Hash, 
-  Upload, 
-  FileSpreadsheet,
-  Download,
-  AlertCircle,
-  ChevronDown,
-  ChevronUp,
-  User,
-  Wallet,
-  Package,
-  BarChart3,
-  LogOut,
-  Menu,
   Plus,
   Minus,
-  Home,
-  CreditCard,
-  History,
-  Settings,
+  Package,
   ArrowLeft,
-  TrendingUp,
-  Users,
-  DollarSign,
-  Activity,
   Shield,
   RefreshCw,
-  FileText,
   CheckCircle,
-  XCircle,
-  Info,
-  Zap,
-  Eye,
-  EyeOff,
-  Trash2,
-  Edit2,
-  Terminal
+  AlertCircle
 } from 'lucide-react';
 
 // API Base URL
@@ -68,8 +41,6 @@ export default function DataMartMainPage() {
   const [purchaseMode, setPurchaseMode] = useState('single');
   const [cart, setCart] = useState([]);
   const [showCart, setShowCart] = useState(false);
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [showAccountMenu, setShowAccountMenu] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [userBalance, setUserBalance] = useState(0);
@@ -238,22 +209,6 @@ export default function DataMartMainPage() {
       localStorage.setItem('userData', JSON.stringify(userData));
     }
   };
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-[#2a2d3a] flex items-center justify-center">
-        <div className="text-center">
-          <Shield className="w-16 h-16 text-yellow-400 mx-auto mb-4 animate-pulse" />
-          <Loader2 className="w-12 h-12 animate-spin text-yellow-400 mx-auto mb-4" />
-          <p className="text-white text-lg">Verifying authentication...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return null;
-  }
 
   const handleProductSelect = (product) => {
     if (purchaseMode === 'single') {
@@ -443,6 +398,22 @@ export default function DataMartMainPage() {
     }
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#2a2d3a] flex items-center justify-center">
+        <div className="text-center">
+          <Shield className="w-16 h-16 text-yellow-400 mx-auto mb-4 animate-pulse" />
+          <Loader2 className="w-12 h-12 animate-spin text-yellow-400 mx-auto mb-4" />
+          <p className="text-white text-lg">Verifying authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#2a2d3a] flex items-center justify-center">
@@ -456,169 +427,14 @@ export default function DataMartMainPage() {
 
   return (
     <div className="min-h-screen bg-[#2a2d3a] relative">
-      {/* HEADER */}
-      <header className="bg-[#1f2128] border-b border-gray-700 sticky top-0 z-30">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
-            {/* Left Section */}
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={() => setShowMobileMenu(!showMobileMenu)}
-                className="lg:hidden p-2 text-white hover:text-yellow-400 transition-colors"
-              >
-                <Menu className="w-6 h-6" />
-              </button>
-              
-              <h1 className="text-xl sm:text-2xl font-bold text-yellow-400">DATAMART</h1>
-              
-              <nav className="hidden lg:flex items-center gap-6 ml-8">
-                <a href="#" className="text-yellow-400 font-medium hover:text-yellow-500 transition-colors">Home</a>
-                <a href="/orders" className="text-gray-300 hover:text-white transition-colors">Orders</a>
-                <button 
-                  onClick={() => setPurchaseMode('bulk')}
-                  className="text-gray-300 hover:text-white transition-colors"
-                >
-                  Bulk Orders
-                </button>
-                <a href="/api-docs" className="text-gray-300 hover:text-white transition-colors flex items-center gap-1">
-                  <Terminal className="w-4 h-4" />
-                  API Docs
-                </a>
-                <a href="/profile" className="text-gray-300 hover:text-white transition-colors">Profile</a>
-              </nav>
-            </div>
-            
-            {/* Right Section */}
-            <div className="flex items-center gap-2 sm:gap-4">
-              {userData && (
-                <div className="hidden lg:flex items-center gap-2 text-sm text-gray-400">
-                  <User className="w-4 h-4" />
-                  <span>{userData.fullName || userData.email}</span>
-                  {userData.role === 'admin' && (
-                    <span className="px-2 py-0.5 bg-purple-600 text-white text-xs rounded">Admin</span>
-                  )}
-                </div>
-              )}
-              
-              <div className="hidden sm:flex items-center gap-2 bg-gray-800 px-2 sm:px-3 py-1.5 rounded-lg">
-                <Wallet className="w-4 h-4 text-yellow-400" />
-                <span className="text-white font-medium text-sm sm:text-base">₵{userBalance.toFixed(2)}</span>
-              </div>
-              
-              <button
-                onClick={() => setShowCart(true)}
-                className="relative p-2 text-white hover:text-yellow-400 transition-colors"
-              >
-                <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6" />
-                {cart.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-                    {cart.length}
-                  </span>
-                )}
-              </button>
-              
-              <button
-                onClick={() => setShowAccountMenu(!showAccountMenu)}
-                className="p-2 text-white hover:text-yellow-400 transition-colors"
-              >
-                <User className="w-5 h-5 sm:w-6 sm:h-6" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* MOBILE MENU DRAWER */}
-      {showMobileMenu && (
-        <div className="lg:hidden fixed inset-0 z-40">
-          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={() => setShowMobileMenu(false)} />
-          <div className="absolute left-0 top-0 h-full w-64 bg-[#1f2128] shadow-xl">
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-white">Menu</h2>
-                <button onClick={() => setShowMobileMenu(false)} className="text-gray-400 hover:text-white">
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-              
-              {userData && (
-                <div className="mb-4 p-3 bg-gray-800 rounded-lg">
-                  <p className="text-xs text-gray-400">Logged in as</p>
-                  <p className="text-white font-medium">{userData.fullName || userData.email}</p>
-                  {userData.role && (
-                    <span className="inline-block mt-1 px-2 py-0.5 bg-gray-700 text-gray-300 text-xs rounded">
-                      {userData.role}
-                    </span>
-                  )}
-                </div>
-              )}
-              
-              <nav className="space-y-2">
-                <a href="#" className="flex items-center gap-3 px-3 py-2 text-yellow-400 bg-gray-800 rounded-lg">
-                  <Home className="w-5 h-5" />
-                  Home
-                </a>
-                <a href="/orders" className="flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-gray-800 rounded-lg">
-                  <Package className="w-5 h-5" />
-                  Orders
-                </a>
-                <button 
-                  onClick={() => {
-                    setPurchaseMode('bulk');
-                    setShowMobileMenu(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-gray-800 rounded-lg text-left"
-                >
-                  <FileSpreadsheet className="w-5 h-5" />
-                  Bulk Orders
-                </button>
-                <a href="/api-docs" className="flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-gray-800 rounded-lg">
-                  <Terminal className="w-5 h-5" />
-                  API Documentation
-                </a>
-                <a href="/profile" className="flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-gray-800 rounded-lg">
-                  <User className="w-5 h-5" />
-                  Profile
-                </a>
-                <a href="/wallet" className="flex items-center gap-3 px-3 py-2 text-gray-300 hover:bg-gray-800 rounded-lg">
-                  <CreditCard className="w-5 h-5" />
-                  Top Up Wallet
-                </a>
-              </nav>
-              
-              <div className="mt-6 p-3 bg-gray-800 rounded-lg">
-                <p className="text-gray-400 text-sm mb-1">Wallet Balance</p>
-                <p className="text-2xl font-bold text-yellow-400">₵{userBalance.toFixed(2)}</p>
-              </div>
-              
-              <div className="mt-4 space-y-2">
-                <button 
-                  onClick={() => router.push('/api-docs')}
-                  className="w-full py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Terminal className="w-4 h-4" />
-                  View API Docs
-                </button>
-                <button className="w-full py-2 bg-yellow-400 text-gray-900 font-medium rounded-lg hover:bg-yellow-500 transition-colors">
-                  Top Up Wallet
-                </button>
-                <button 
-                  onClick={() => router.push('/orders')}
-                  className="w-full py-2 bg-gray-700 text-white font-medium rounded-lg hover:bg-gray-600 transition-colors"
-                >
-                  View Orders
-                </button>
-                <button 
-                  onClick={handleLogout}
-                  className="w-full py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* NAVIGATION COMPONENT */}
+      <Navigation 
+        userData={userData}
+        userBalance={userBalance}
+        cartCount={cart.length}
+        onCartClick={() => setShowCart(true)}
+        onPurchaseModeChange={setPurchaseMode}
+      />
 
       {/* HERO SECTION */}
       <section className="bg-gradient-to-r from-yellow-400 to-yellow-600 py-8 sm:py-12 lg:py-16">
@@ -695,9 +511,7 @@ export default function DataMartMainPage() {
 
       {/* MAIN CONTENT */}
       <main className="container mx-auto px-4 py-6 sm:py-8 lg:py-12">
-        {/* ============================================= */}
-        {/* FIXED ERROR/SUCCESS MESSAGES - NOW VISIBLE! */}
-        {/* ============================================= */}
+        {/* ERROR/SUCCESS MESSAGES */}
         {error && !selectedProduct && purchaseMode !== 'bulk' && (
           <div className="mb-6 p-4 bg-red-600 rounded-lg shadow-lg">
             <div className="flex items-center gap-3">
@@ -747,9 +561,7 @@ export default function DataMartMainPage() {
               </p>
             </div>
 
-            {/* ============================================= */}
-            {/* FIXED ERROR MESSAGE - NOW VISIBLE! */}
-            {/* ============================================= */}
+            {/* ERROR MESSAGE */}
             {error && (
               <div className="mb-4 p-4 bg-red-600 rounded-lg shadow-lg">
                 <div className="flex items-start gap-3">
@@ -759,9 +571,7 @@ export default function DataMartMainPage() {
               </div>
             )}
             
-            {/* ============================================= */}
-            {/* FIXED SUCCESS MESSAGE - NOW VISIBLE! */}
-            {/* ============================================= */}
+            {/* SUCCESS MESSAGE */}
             {success && (
               <div className="mb-4 p-4 bg-green-600 rounded-lg shadow-lg">
                 <div className="flex items-center gap-3">
@@ -912,63 +722,6 @@ export default function DataMartMainPage() {
           userBalance={userBalance}
         />
       )}
-      
-      {/* ACCOUNT DROPDOWN */}
-      {showAccountMenu && (
-        <div className="absolute top-16 right-4 w-48 bg-gray-800 rounded-lg shadow-lg py-1 z-50">
-          {userData && (
-            <div className="px-3 py-2 border-b border-gray-700">
-              <p className="text-xs text-gray-400">Signed in as</p>
-              <p className="text-white text-sm font-medium truncate">{userData.email}</p>
-            </div>
-          )}
-          <a href="/profile" className="flex items-center gap-2 px-3 py-1.5 text-gray-300 hover:bg-gray-700 hover:text-white text-sm">
-            <User className="w-3 h-3" />
-            Profile
-          </a>
-          <a href="/orders" className="flex items-center gap-2 px-3 py-1.5 text-gray-300 hover:bg-gray-700 hover:text-white text-sm">
-            <History className="w-3 h-3" />
-            Order History
-          </a>
-          <a href="/wallet" className="flex items-center gap-2 px-3 py-1.5 text-gray-300 hover:bg-gray-700 hover:text-white text-sm">
-            <CreditCard className="w-3 h-3" />
-            Top Up Wallet
-          </a>
-          <a href="/api-docs" className="flex items-center gap-2 px-3 py-1.5 text-gray-300 hover:bg-gray-700 hover:text-white text-sm">
-            <Terminal className="w-3 h-3" />
-            API Documentation
-          </a>
-          {userData?.role === 'admin' && (
-            <>
-              <hr className="my-1 border-gray-700" />
-              <a href="/admin" className="flex items-center gap-2 px-3 py-1.5 text-purple-400 hover:bg-gray-700 text-sm">
-                <Shield className="w-3 h-3" />
-                Admin Panel
-              </a>
-            </>
-          )}
-          {(userData?.role === 'dealer' || userData?.role === 'supplier') && (
-            <>
-              <hr className="my-1 border-gray-700" />
-              <div className="px-3 py-2">
-                <p className="text-xs text-gray-400 mb-1">API Access</p>
-                <a href="/api-docs" className="flex items-center gap-2 py-1 text-yellow-400 hover:text-yellow-500 text-sm">
-                  <Terminal className="w-3 h-3" />
-                  View API Docs
-                </a>
-              </div>
-            </>
-          )}
-          <hr className="my-1 border-gray-700" />
-          <button 
-            onClick={handleLogout}
-            className="w-full flex items-center gap-2 px-3 py-1.5 text-red-400 hover:bg-gray-700 text-left text-sm"
-          >
-            <LogOut className="w-3 h-3" />
-            Logout
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -1013,7 +766,7 @@ function ProductCard({ product, onSelect }) {
   );
 }
 
-// CART SIDEBAR COMPONENT
+// CART SIDEBAR COMPONENT  
 function CartSidebar({ cart, onClose, onRemoveItem, totalAmount, onCheckout, userBalance }) {
   const [processing, setProcessing] = useState(false);
   
