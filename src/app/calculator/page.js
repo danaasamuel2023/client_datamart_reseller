@@ -32,6 +32,8 @@ export default function ExcelCalculator() {
   const [showPricing, setShowPricing] = useState(false);
   const [fileResults, setFileResults] = useState([]);
   const [showInvalidOnly, setShowInvalidOnly] = useState(false);
+  const [inputMode, setInputMode] = useState('file'); // 'file' or 'text'
+  const [textInput, setTextInput] = useState('');
   
   // MTN Official Pricing Structure (No Expiry)
   const defaultPrices = {
@@ -645,6 +647,130 @@ export default function ExcelCalculator() {
     if (fileInput) fileInput.value = '';
   };
   
+  // Process direct text input
+  const processTextInput = () => {
+    if (!textInput.trim()) {
+      setError('Please enter some data to calculate');
+      return;
+    }
+
+    const lines = textInput.trim().split('\n').filter(line => line.trim());
+
+    if (lines.length === 0) {
+      setError('No valid lines found');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const startId = calculations.length + 1;
+      const processedRows = [];
+      const uniqueNumbers = new Set();
+      let totalValidCost = 0;
+      let totalValidGB = 0;
+      let validRowCount = 0;
+
+      lines.forEach((line, index) => {
+        const trimmed = line.trim();
+        // Split by comma, space, tab, or pipe
+        const parts = trimmed.split(/[,\s\t|]+/).filter(Boolean);
+
+        let phoneNumber = '';
+        let capacity = null;
+
+        // Try to identify phone and capacity from parts
+        for (const part of parts) {
+          const cleaned = part.replace(/[\s\-\(\)\.]/g, '');
+          // Check if it looks like a phone number
+          if (/^(\+?233|0)?[2-9][0-9]{7,8}$/.test(cleaned) && !phoneNumber) {
+            phoneNumber = cleaned;
+          } else {
+            // Try as capacity
+            const capMatch = part.match(/^(\d+(?:\.\d+)?)\s*(?:GB)?$/i);
+            if (capMatch && capacity === null) {
+              const num = parseFloat(capMatch[1]);
+              if (num > 0 && num <= 100) {
+                capacity = num;
+              }
+            }
+          }
+        }
+
+        const formattedPhone = formatPhoneNumber(phoneNumber);
+        const isValidPhone = validatePhoneNumber(formattedPhone);
+        const isValidCapacity = capacity !== null && capacity > 0;
+
+        let cost = 0;
+        let matchedTier = '';
+
+        if (isValidCapacity) {
+          cost = findPriceForCapacity(capacity, prices);
+          Object.keys(prices).forEach(tier => {
+            if (prices[tier] === cost && !matchedTier) {
+              matchedTier = tier + 'GB';
+            }
+          });
+        }
+
+        let phoneError = '';
+        let capacityError = '';
+
+        if (!phoneNumber) {
+          phoneError = 'No phone number detected';
+        } else if (!isValidPhone) {
+          phoneError = `Invalid: "${phoneNumber}" - must be 10-digit Ghana number`;
+        }
+
+        if (capacity === null) {
+          capacityError = 'No capacity value detected';
+        }
+
+        const rowData = {
+          id: startId + index,
+          fileName: 'Text Input',
+          rowNumber: index + 1,
+          originalPhone: phoneNumber || 'Not found',
+          formattedPhone: formattedPhone,
+          capacity: capacity || 0,
+          matchedTier: matchedTier,
+          cost: cost,
+          isValid: isValidPhone && isValidCapacity,
+          phoneError: phoneError,
+          capacityError: capacityError,
+          rawData: trimmed
+        };
+
+        processedRows.push(rowData);
+
+        if (rowData.isValid) {
+          uniqueNumbers.add(formattedPhone);
+          totalValidCost += cost;
+          totalValidGB += capacity;
+          validRowCount++;
+        }
+      });
+
+      const allCalculations = [...calculations, ...processedRows];
+      setCalculations(allCalculations);
+      setFileResults(prev => [...prev, {
+        fileName: 'Text Input',
+        rows: processedRows.length,
+        validRows: validRowCount,
+        cost: totalValidCost
+      }]);
+      updateTotalSummary(allCalculations);
+      setSuccess(`Processed ${lines.length} line(s) from text input`);
+      setTextInput('');
+    } catch (err) {
+      console.error('Error processing text input:', err);
+      setError('Failed to process text input');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Remove specific file's calculations
   const removeFile = (fileName) => {
     const updatedCalculations = calculations.filter(calc => calc.fileName !== fileName);
@@ -674,7 +800,7 @@ export default function ExcelCalculator() {
                 <Calculator className="w-8 h-8" />
                 MTN Data Calculator - Smart Detection
               </h1>
-              <p className="text-gray-700">Auto-detects phone numbers and capacity from any Excel format</p>
+              <p className="text-gray-700">Auto-detects phone numbers and capacity from Excel files or direct text input</p>
             </div>
             <button
               onClick={() => setShowPricing(!showPricing)}
@@ -714,9 +840,10 @@ export default function ExcelCalculator() {
             <Info className="w-5 h-5 text-blue-500 mt-1" />
             <div className="text-blue-400 text-sm">
               <p className="font-bold mb-1">Smart Detection Active</p>
+              <p>• Upload Excel/CSV files or type/paste data directly</p>
               <p>• Automatically detects 9-10 digit phone numbers in any column</p>
               <p>• Identifies capacity values (1-99GB) with various formats: "5", "5GB", "GB 5"</p>
-              <p>• No specific column names required - works with any Excel format</p>
+              <p>• Text input format: one entry per line — e.g. "0241234567 5" or "0241234567, 10"</p>
               <p>• Shows detailed reasons for any invalid data</p>
             </div>
           </div>
@@ -807,40 +934,113 @@ export default function ExcelCalculator() {
           </div>
         )}
         
-        {/* Upload Section */}
+        {/* Input Section */}
         {calculations.length === 0 && (
           <div className="bg-gray-800 rounded-lg p-8">
             <div className="max-w-2xl mx-auto">
-              <div className="border-2 border-dashed border-yellow-400 rounded-lg p-8 text-center">
-                <FileSpreadsheet className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-white mb-2">Upload Excel Files</h3>
-                <p className="text-gray-400 mb-6">
-                  Upload Excel files with phone numbers and data capacity in any format
-                </p>
-                
-                <label htmlFor="file-upload" className="cursor-pointer">
-                  <span className="inline-block px-6 py-3 bg-yellow-400 text-gray-900 font-bold rounded-lg hover:bg-yellow-500 transition-colors">
-                    Choose Files
-                  </span>
-                  <input
-                    id="file-upload"
-                    type="file"
-                    accept=".xlsx,.xls,.csv"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    multiple
-                  />
-                </label>
-                
-                <p className="text-gray-500 text-sm mt-2">You can select multiple files at once</p>
-                
+              {/* Mode Tabs */}
+              <div className="flex mb-6 bg-gray-700 rounded-lg p-1">
                 <button
-                  onClick={downloadTemplate}
-                  className="block mx-auto mt-4 text-yellow-400 hover:text-yellow-300 underline"
+                  onClick={() => setInputMode('file')}
+                  className={`flex-1 py-2 px-4 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-colors ${
+                    inputMode === 'file'
+                      ? 'bg-yellow-400 text-gray-900'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
                 >
-                  Download Sample Template
+                  <Upload className="w-4 h-4" />
+                  Upload File
+                </button>
+                <button
+                  onClick={() => setInputMode('text')}
+                  className={`flex-1 py-2 px-4 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-colors ${
+                    inputMode === 'text'
+                      ? 'bg-yellow-400 text-gray-900'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Edit className="w-4 h-4" />
+                  Type / Paste Text
                 </button>
               </div>
+
+              {/* File Upload Mode */}
+              {inputMode === 'file' && (
+                <div className="border-2 border-dashed border-yellow-400 rounded-lg p-8 text-center">
+                  <FileSpreadsheet className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-bold text-white mb-2">Upload Excel Files</h3>
+                  <p className="text-gray-400 mb-6">
+                    Upload Excel files with phone numbers and data capacity in any format
+                  </p>
+
+                  <label htmlFor="file-upload" className="cursor-pointer">
+                    <span className="inline-block px-6 py-3 bg-yellow-400 text-gray-900 font-bold rounded-lg hover:bg-yellow-500 transition-colors">
+                      Choose Files
+                    </span>
+                    <input
+                      id="file-upload"
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      multiple
+                    />
+                  </label>
+
+                  <p className="text-gray-500 text-sm mt-2">You can select multiple files at once</p>
+
+                  <button
+                    onClick={downloadTemplate}
+                    className="block mx-auto mt-4 text-yellow-400 hover:text-yellow-300 underline"
+                  >
+                    Download Sample Template
+                  </button>
+                </div>
+              )}
+
+              {/* Text Input Mode */}
+              {inputMode === 'text' && (
+                <div className="border-2 border-dashed border-yellow-400 rounded-lg p-6">
+                  <h3 className="text-xl font-bold text-white mb-2">Enter Data Directly</h3>
+                  <p className="text-gray-400 mb-1 text-sm">
+                    Type or paste phone numbers with capacity, one per line.
+                  </p>
+                  <p className="text-gray-500 mb-4 text-xs">
+                    Formats: <span className="text-yellow-400">0241234567 5</span> or <span className="text-yellow-400">0241234567, 10</span> (just the number, no need to add GB)
+                  </p>
+
+                  <textarea
+                    value={textInput}
+                    onChange={(e) => setTextInput(e.target.value)}
+                    placeholder={`0241234567 5\n0551234567 10\n0201234567 20\n0271234567 3`}
+                    className="w-full h-48 p-4 bg-gray-900 text-white rounded-lg border border-gray-600 focus:border-yellow-400 focus:outline-none resize-y font-mono text-sm placeholder-gray-600"
+                  />
+
+                  <div className="flex items-center justify-between mt-4">
+                    <p className="text-gray-500 text-xs">
+                      {textInput.trim() ? textInput.trim().split('\n').filter(l => l.trim()).length : 0} line(s)
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setTextInput('')}
+                        disabled={!textInput.trim()}
+                        className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Clear
+                      </button>
+                      <button
+                        onClick={processTextInput}
+                        disabled={!textInput.trim()}
+                        className="px-6 py-2 bg-yellow-400 text-gray-900 font-bold rounded-lg hover:bg-yellow-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        <Calculator className="w-4 h-4" />
+                        Calculate
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
